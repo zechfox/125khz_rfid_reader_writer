@@ -1,4 +1,4 @@
-TARGET=dht12_demo
+TARGET=125kzh_rfid_reader_writer
 JLINK_DEVICE_NAME=MKL02Z32xxx4
 LOAD_SCRIPT=load_script.jlink
 PROJECT_PATH = ./
