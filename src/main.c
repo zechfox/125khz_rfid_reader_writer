@@ -9,7 +9,7 @@
 #include "fsl_debug_console.h"
 #include "configuration.h"
 #include "lcd_PCD8544.h"
-#include "dht12.h"
+#include "rfid.h"
 #include "mcu_MKL02Z32VFM4.h"
 
 #include "fsl_gpio.h"
@@ -18,16 +18,22 @@
 int main(void)
 {
 
-  char temp_str[6];
-  char humi_str[6];
-
   //initial MCU
   initial_mcu();
-    
 
   //initial devices
   lcd_initial();
 
+  /*
+   * LCD layout
+   * ==============
+   * TagId: 
+   * xxxxxxxxxxxxxx
+   * TagType:EM4100/T5557
+   * Modulation:AM/FSK/PSK
+   * Mode:Read/Write
+   * ==============
+   */
 
   while(1)
   {
@@ -36,21 +42,42 @@ int main(void)
     {
       __NOP();
     }
-    PRINTF("Start read DHT12. \r\n");
-    status_t result = dht12_get_temp_humi(temp_str, humi_str);
+    if(!g_is_transmitting)
+    {
+      PRINTF("Start TPM1. \r\n");
+      rfid_enable_carrier();
+    }
+    status_t result = kStatus_Success;
     if(kStatus_Success == result)
     {
-      lcd_update_display_buffer(1, 0, "temperature:");
-      lcd_update_display_buffer(2, 3, temp_str);
-      lcd_update_display_buffer(3, 0, "humidity");
-      lcd_update_display_buffer(4, 3, humi_str);
+      lcd_update_display_buffer(1, 0, "TagId:");
+      lcd_update_display_buffer(2, 0, "DummyId");
+      lcd_update_display_buffer(3, 0, "TagType:");
+      lcd_update_display_buffer(4, 0, "Modulation");
+      if(READ == g_work_mode)
+      {
+        lcd_update_display_buffer(5, 3, "Mode:Read");
+      }
+      else
+      {
+        lcd_update_display_buffer(5, 3, "Mode:Write");
+      } 
 
       PRINTF("refresh LCD. \r\n");
       lcd_refresh_screen();
     }
-    else
-      PRINTF("read DHT12 failed %d \r\n", result);
 
   }
   return 0;
 }
+
+
+// gpio interrrupt handler
+// handle modulation signal
+
+
+// timer handler
+// toggle carrier transmit gpio pin
+
+
+

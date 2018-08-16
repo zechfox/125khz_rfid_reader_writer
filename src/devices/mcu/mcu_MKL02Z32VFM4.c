@@ -11,6 +11,7 @@
 #include "fsl_debug_console.h"
 #include "fsl_lpsci.h"
 #include "fsl_i2c.h"
+#include "fsl_tpm.h"
 
 #include "configuration.h"
 #include "mcu_MKL02Z32VFM4.h"
@@ -89,6 +90,11 @@ bool initial_mcu(void)
   if(!initial_adc())
   {
     return false;
+  }
+
+  if(!initial_tpm())
+  {
+      return false;
   }
 
   PRINTF("Initial MCU finished. \r\n");
@@ -411,6 +417,59 @@ bool initial_adc(void)
   return true;
 }
 
+bool initial_tpm(void)
+{
+  PRINTF("Start initial MCU TPM. \r\n");
+#ifdef USE_TPM
+  CLOCK_EnableClock(kCLOCK_PortB);                           /* Port B Clock Gate Control: Clock enabled */
+
+  PORT_SetPinMux(TPM1_CH0_PORT, TPM1_CH0_PIN_IDX, kPORT_MuxAlt2);    /* PORTB6 (pin 1) is configured as TPM1_CH1 */
+  PORT_SetPinMux(TPM1_CH1_PORT, TPM1_CH1_PIN_IDX, kPORT_MuxAlt2);    /* PORTB7 (pin 2) is configured as TPM1_CH0 */
+  // seems TPM1 channel 0 needs following setting to distinguish TPM or CMP
+  SIM->SOPT4 = ((SIM->SOPT4 &
+    (~(SIM_SOPT4_TPM1CH0SRC_MASK)))                          /* Mask bits to zero which are setting */
+      | SIM_SOPT4_TPM1CH0SRC(SOPT4_TPM1CH0SRC_TPM1)          /* TPM1 channel 0 input capture source select: TPM1_CH0 signal */
+    );
+  /* Select the clock source for the TPM counter as MCGFLLCLK */
+  CLOCK_SetTpmClock(1U);
+
+  tpm_config_t tpmInfo;
+  tpm_chnl_pwm_signal_param_t tpmParam[2];
+
+  /* Configure tpm params with frequency 24kHZ */
+  tpmParam[0].chnlNumber = (tpm_chnl_t)0;
+  tpmParam[0].level = kTPM_LowTrue;
+  tpmParam[0].dutyCyclePercent = 50;
+
+  tpmParam[1].chnlNumber = (tpm_chnl_t)1;
+  tpmParam[1].level = kTPM_LowTrue;
+  tpmParam[1].dutyCyclePercent = 50;
+  /*
+   * tpmInfo.prescale = kTPM_Prescale_Divide_1;
+   * tpmInfo.useGlobalTimeBase = false;
+   * tpmInfo.enableDoze = false;
+   * tpmInfo.enableDebugMode = false;
+   * tpmInfo.enableReloadOnTrigger = false;
+   * tpmInfo.enableStopOnOverflow = false;
+   * tpmInfo.enableStartOnTrigger = false;
+   * tpmInfo.enablePauseOnTrigger = false;
+   * tpmInfo.triggerSelect = kTPM_Trigger_Select_0;
+   * tpmInfo.triggerSource = kTPM_TriggerSource_External;
+   */
+  TPM_GetDefaultConfig(&tpmInfo);
+  /* Initialize TPM module */
+  TPM_Init(TPM1, &tpmInfo);
+
+  TPM_SetupPwm(TPM1, tpmParam, 1U, kTPM_EdgeAlignedPwm, RFID_CARRIER_FEQ, TPM_SOURCE_CLOCK);
+  /* Setup input capture on a TPM channel */
+  TPM_SetupInputCapture(TPM1, kTPM_Chnl_0, kTPM_RiseAndFallEdge);
+
+#endif
+  PRINTF("Initial MCU TPM finished. \r\n");
+
+  return true;
+
+}
 
 void i2c_release_bus(void)
 {
@@ -464,3 +523,4 @@ void i2c_release_bus(void)
   just_short_delay();
 
 }
+

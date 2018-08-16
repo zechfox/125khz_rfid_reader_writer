@@ -1,7 +1,7 @@
 TARGET=125kzh_rfid_reader_writer
 JLINK_DEVICE_NAME=MKL02Z32xxx4
 LOAD_SCRIPT=load_script.jlink
-PROJECT_PATH = ./
+PROJECT_PATH = ./src
 PROJECT_SRCS := $(shell find $(PROJECT_PATH) -name '*.c')
 
 OUT_DIR=build
@@ -31,7 +31,7 @@ INC += $(MKL02Z4_UTILITIES_PATH)
 INC += $(CMSIS_PATH)/Include/
 INC += $(PROJECT_PATH)/devices/mcu/
 INC += $(PROJECT_PATH)/devices/lcd/
-INC += $(PROJECT_PATH)/devices/dht12/
+INC += $(PROJECT_PATH)/devices/rfid/
 
 TARGET_ELF=$(OUT_DIR)/$(TARGET).elf
 TARGET_HEX=$(OUT_DIR)/$(TARGET).hex
