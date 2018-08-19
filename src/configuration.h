@@ -150,12 +150,18 @@
 #define RFID_RECEIVE_DATA_CHANNEL_INTERRUPT_ENABLE kTPM_Chnl0InterruptEnable
 #define RFID_RECEIVE_DATA_CHANNEL_FLAG kTPM_Chnl0Flag
 
+// used for receive rfid data
 #define RFID_HEADER_BITS 9U
 #define RFID_EM4100_DATA_BITS 64U
-
 #define RFID_MANCHE_REVERSE_PULSE_WIDTH 333
 #define RFID_MANCHE_PULSE_WIDTH  111
 #define RFID_MANCHE_PULSE_BIAS  20
+
+// used for parse rfid data
+// total 11 groups(raws) bit, first 10 group for data, 
+// the last one for columns parity
+#define RFID_BIT_GROUPS 11U
+#define RFID_BITS_EACH_GROUP ((RFID_EM4100_DATA_BITS - RFID_HEADER_BITS) / RFID_BIT_GROUPS)
 
 
 

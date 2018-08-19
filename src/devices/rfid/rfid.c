@@ -11,6 +11,7 @@ bool g_is_transmitting = false;
 workMode g_work_mode = READ;
 recvDataState g_recv_data_state = SEEK_HEADER;
 unsigned char g_rfid_bits_buffer[RFID_EM4100_DATA_BITS];
+rfidTag g_rfid_tag;
 #ifdef RFID_DBG
 unsigned char g_rfid_pulse_width[RFID_EM4100_DATA_BITS];
 #endif
@@ -34,6 +35,9 @@ void rfid_init()
     g_rfid_pulse_width[i] = 0x0;
   }
 #endif
+  g_rfid_tag.version_number = 0xFF;
+  g_rfid_tag.tag_id = 0xFFFFFFFF;
+
 
   return;
 }
@@ -69,14 +73,97 @@ void rfid_disable_carrier()
     return;
 }
 
-// read tag id
-rfidTag rfid_read_tag()
+status_t rfid_parity_check()
 {
-    rfidTag tag;
-    tag.version_number = 0xFF;
-    tag.rfid = 0xFFFFFFFF;
+    status_t result = kStatus_Fail;
+    unsigned char column_parity[4] = {0, 0, 0, 0};
+    unsigned char *check_bits_ptr = &g_rfid_bits_buffer[RFID_HEADER_BITS];
 
-    return tag;
+#ifdef RFID_DBG_PARITiY
+    unsigned char bit_counts = 0;
+#endif
+
+    for(unsigned char i = 0; i < RFID_BIT_GROUPS;i++)
+    {
+	unsigned char raw_parity = 0;
+	// calculate how many 1 in the first 4bits of each group
+	for(unsigned char h = 0; h < RFID_BITS_EACH_GROUP - 1; h++)
+	{
+	    unsigned char check_bit = *check_bits_ptr++;
+	    raw_parity += check_bit; 
+	    column_parity[h] += check_bit;
+#ifdef RFID_DBG_PARITiY
+	    PRINTF("INFO: Bit %d. raw %d parity is %d, column %d parity is %d", bit_counts++, i, raw_parity & 1, h, column_parity[h] & 1);
+#endif
+	}
+	// the last bit of each group indicate 1 numbers
+#ifdef RFID_DBG_PARITiY
+	PRINTF("INFO: Bit %d. Check Raw %d parity", bit_counts++, i);
+#endif
+	if((raw_parity & 1) != *check_bits_ptr++)
+	{
+	    PRINTF("ERROR: Parity error in raw %d parity.\r\n", i);
+            result = kStatus_Fail;
+	    break;
+	}
+    }
+    // last group contains column parity
+    for(unsigned char p = 0;p < 4;p++)
+    {
+#ifdef RFID_DBG_PARITiY
+	PRINTF("INFO: Bit %d. Check Column %d parity", bit_counts++, p);
+#endif
+	if((column_parity[p] & 1) != *check_bits_ptr++)
+	{
+#ifdef RFID_DBG_PARITiY
+	    PRINTF("ERROR: Parity error in column %d parity. \r\n", p);
+#endif
+            result = kStatus_Fail;
+	    break;
+	}
+    }
+
+    // the last bit should always be 0
+#ifdef RFID_DBG_PARITiY
+    PRINTF("INFO: Bit %d. The last bit is stop bit, should be 0.", bit_counts++);
+#endif
+    if(*check_bits_ptr)
+    {
+#ifdef RFID_DBG_PARITY
+	    PRINTF("ERROR: The last bit is not 0. \r\n", (p+1));
+#endif
+            result = kStatus_Fail;
+    }
+
+    return result;
+}
+
+// parse tag data
+status_t rfid_parse_data(rfidTag *rfid_tag_ptr)
+{
+    status_t result = kStatus_Fail;
+    unsigned char *tag_bits_ptr = &g_rfid_bits_buffer[RFID_HEADER_BITS];
+    
+    result = rfid_parity_check();    
+
+    if(kStatus_Success == result)
+    {
+	// first 8bits is version number/customer ID
+	rfid_tag_ptr->version_number = 0;
+	for(unsigned char i = 0;i < 8;i++)
+	{
+	    rfid_tag_ptr->version_number |= (*tag_bits_ptr << i); 
+	    tag_bits_ptr++;
+	}
+        // next 32bits is tag id
+	rfid_tag_ptr->tag_id = 0;
+	for(unsigned char i = 0;i < 32;i++)
+	{
+	    rfid_tag_ptr->tag_id |= (*tag_bits_ptr << i); 
+	    tag_bits_ptr++;
+	}
+    }
+    return result;
 }
 
 void RFID_RECEIVE_DATA_HANDLER(void)
