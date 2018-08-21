@@ -60,11 +60,11 @@ int main(void)
    * Mode:Read/Write
    * ==============
    */
-  lcd_update_display_buffer(1, 0, "TagId:");
-  lcd_update_display_buffer(2, 0, "FFFFFFFF");
-  lcd_update_display_buffer(3, 0, "TagType:UNKN");
-  lcd_update_display_buffer(4, 0, "Modulation:UNKN");
-  lcd_update_display_buffer(5, 3, "Mode:Read");
+  lcd_update_display_buffer(0, 0, "TagId:");
+  lcd_update_display_buffer(1, 0, "FFFFFFFF");
+  lcd_update_display_buffer(2, 0, "TagType:UNKN");
+  lcd_update_display_buffer(3, 0, "Mod:UNKN");
+  lcd_update_display_buffer(4, 0, "Mode:Read");
 
   PRINTF("refresh LCD. \r\n");
   lcd_refresh_screen();

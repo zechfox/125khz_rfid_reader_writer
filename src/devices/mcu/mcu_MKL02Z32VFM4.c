@@ -423,8 +423,8 @@ bool initial_tpm(void)
 #ifdef USE_TPM
   CLOCK_EnableClock(kCLOCK_PortB);                           /* Port B Clock Gate Control: Clock enabled */
 
-  PORT_SetPinMux(TPM1_CH0_PORT, TPM1_CH0_PIN_IDX, kPORT_MuxAlt2);    /* PORTB6 (pin 1) is configured as TPM1_CH1 */
-  PORT_SetPinMux(TPM1_CH1_PORT, TPM1_CH1_PIN_IDX, kPORT_MuxAlt2);    /* PORTB7 (pin 2) is configured as TPM1_CH0 */
+  PORT_SetPinMux(TPM1_CH1_PORT, TPM1_CH1_PIN_IDX, kPORT_MuxAlt2);    /* PORTB6 (pin 1) is configured as TPM1_CH1 */
+  PORT_SetPinMux(TPM1_CH0_PORT, TPM1_CH0_PIN_IDX, kPORT_MuxAlt2);    /* PORTB7 (pin 2) is configured as TPM1_CH0 */
   // seems TPM1 channel 0 needs following setting to distinguish TPM or CMP
   SIM->SOPT4 = ((SIM->SOPT4 &
     (~(SIM_SOPT4_TPM1CH0SRC_MASK)))                          /* Mask bits to zero which are setting */
@@ -437,11 +437,11 @@ bool initial_tpm(void)
   tpm_chnl_pwm_signal_param_t tpmParam[2];
 
   /* Configure tpm params with frequency 24kHZ */
-  tpmParam[0].chnlNumber = (tpm_chnl_t)0;
+  tpmParam[0].chnlNumber = (tpm_chnl_t)1;
   tpmParam[0].level = kTPM_LowTrue;
   tpmParam[0].dutyCyclePercent = 50;
 
-  tpmParam[1].chnlNumber = (tpm_chnl_t)1;
+  tpmParam[1].chnlNumber = (tpm_chnl_t)0;
   tpmParam[1].level = kTPM_LowTrue;
   tpmParam[1].dutyCyclePercent = 50;
   /*
@@ -457,6 +457,8 @@ bool initial_tpm(void)
    * tpmInfo.triggerSource = kTPM_TriggerSource_External;
    */
   TPM_GetDefaultConfig(&tpmInfo);
+  tpmInfo.prescale = kTPM_Prescale_Divide_128;
+
   /* Initialize TPM module */
   TPM_Init(TPM1, &tpmInfo);
 

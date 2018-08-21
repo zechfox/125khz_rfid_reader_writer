@@ -139,7 +139,7 @@
 #define RFID_MODULE_TPM TPM0
 #define RFID_CARRIER_FEQ 125000U
 
-/* TPM channel used for input capture */
+/* TPM channel 0 used for input capture */
 #define RFID_RECEIVE_DATA_CHANNEL kTPM_Chnl_0
 
 /* Interrupt number and interrupt handler for the TPM instance used */

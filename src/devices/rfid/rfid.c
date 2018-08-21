@@ -12,9 +12,7 @@ workMode g_work_mode = READ;
 recvDataState g_recv_data_state = SEEK_HEADER;
 unsigned char g_rfid_bits_buffer[RFID_EM4100_DATA_BITS];
 rfidTag g_rfid_tag;
-#ifdef RFID_DBG
 unsigned char g_rfid_pulse_width[RFID_EM4100_DATA_BITS];
-#endif
 
 // initial rfid
 void rfid_init()
@@ -29,12 +27,12 @@ void rfid_init()
   {
     g_rfid_bits_buffer[i] = 0x0;
   }
-#ifdef RFID_DBG
+
   for(unsigned char i = 0;i < RFID_EM4100_DATA_BITS;i++)
   {
     g_rfid_pulse_width[i] = 0x0;
   }
-#endif
+
   g_rfid_tag.version_number = 0xFF;
   g_rfid_tag.tag_id = 0xFFFFFFFF;
 
@@ -48,8 +46,7 @@ void rfid_enable_carrier()
   // enable receive data only in read mode
   if(READ == g_work_mode)
   {
-    /* Set the timer to be in free-running mode */
-    // TODO: need following line?
+    // set counter start at maxmium
     TPM1->MOD = 0xFFFF;
 
     /* Enable channel interrupt when the second edge is detected */
@@ -172,7 +169,7 @@ void RFID_RECEIVE_DATA_HANDLER(void)
     bool is_reverse_bit = 0; // don't reverse bit by default
 
     uint32_t capture_value = RFID_TRANSMIT_TPM->CONTROLS[RFID_RECEIVE_DATA_CHANNEL].CnV;
-#ifdef RFID_DBG
+#ifdef RFID_DBG_RECV
     if(DATA_READY != g_recv_data_state)
     {
 	g_rfid_pulse_width[valid_bits++] = capture_value;
