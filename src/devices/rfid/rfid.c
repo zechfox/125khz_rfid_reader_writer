@@ -90,12 +90,12 @@ status_t rfid_parity_check()
 	    raw_parity += check_bit; 
 	    column_parity[h] += check_bit;
 #ifdef RFID_DBG_PARITiY
-	    PRINTF("INFO: Bit %d. raw %d parity is %d, column %d parity is %d", bit_counts++, i, raw_parity & 1, h, column_parity[h] & 1);
+	    PRINTF("INFO: Bit %d. raw %d parity is %d, column %d parity is %d. \r\n", bit_counts++, i, raw_parity & 1, h, column_parity[h] & 1);
 #endif
 	}
 	// the last bit of each group indicate 1 numbers
 #ifdef RFID_DBG_PARITiY
-	PRINTF("INFO: Bit %d. Check Raw %d parity", bit_counts++, i);
+	PRINTF("INFO: Bit %d. Check Raw %d parity.\r\n", bit_counts++, i);
 #endif
 	if((raw_parity & 1) != *check_bits_ptr++)
 	{
@@ -108,7 +108,7 @@ status_t rfid_parity_check()
     for(unsigned char p = 0;p < 4;p++)
     {
 #ifdef RFID_DBG_PARITiY
-	PRINTF("INFO: Bit %d. Check Column %d parity", bit_counts++, p);
+	PRINTF("INFO: Bit %d. Check Column %d parity.\r\n", bit_counts++, p);
 #endif
 	if((column_parity[p] & 1) != *check_bits_ptr++)
 	{
@@ -122,7 +122,7 @@ status_t rfid_parity_check()
 
     // the last bit should always be 0
 #ifdef RFID_DBG_PARITiY
-    PRINTF("INFO: Bit %d. The last bit is stop bit, should be 0.", bit_counts++);
+    PRINTF("INFO: Bit %d. The last bit is stop bit, should be 0.\r\n", bit_counts++);
 #endif
     if(*check_bits_ptr)
     {

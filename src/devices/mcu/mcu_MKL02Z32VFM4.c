@@ -465,7 +465,7 @@ bool initial_tpm(void)
   /* Initialize TPM module */
   TPM_Init(TPM1, &tpmInfo);
 
-  TPM_SetupPwm(TPM1, tpmParam, 1U, kTPM_EdgeAlignedPwm, RFID_CARRIER_FEQ, TPM_SOURCE_CLOCK);
+  TPM_SetupPwm(TPM1, tpmParam, 1U, kTPM_EdgeAlignedPwm, 24000U, TPM_SOURCE_CLOCK);
   /* Setup input capture on a TPM channel */
   TPM_SetupInputCapture(TPM1, kTPM_Chnl_0, kTPM_RiseAndFallEdge);
 
