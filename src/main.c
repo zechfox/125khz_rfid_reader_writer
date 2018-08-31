@@ -97,6 +97,13 @@ int main(void)
 #endif
     }
 
+    if(RECEIVE_DATA == g_recv_data_state)
+    {
+	g_recv_data_state = SEEK_HEADER;
+	PRINTF("INFO: Received bit width: %d \r\n", g_rfid_pulse_width[0]);
+
+    }
+
     if(kStatus_Success == result)
     {
       unsigned int len = out_hex_str(g_rfid_tag.tag_id, tag_id_str);
