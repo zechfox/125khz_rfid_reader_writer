@@ -58,6 +58,7 @@ void rfid_enable_carrier()
 
   TPM_StartTimer(RFID_TRANSMIT_TPM, kTPM_SystemClock);
   g_is_transmitting = true;
+  g_recv_data_state = SEEK_HEADER;
   return;
 }
 
