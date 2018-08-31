@@ -426,17 +426,20 @@ bool initial_tpm(void)
   PORT_SetPinMux(TPM1_CH1_PORT, TPM1_CH1_PIN_IDX, kPORT_MuxAlt2);    /* PORTB6 (pin 1) is configured as TPM1_CH1 */
   PORT_SetPinMux(TPM1_CH0_PORT, TPM1_CH0_PIN_IDX, kPORT_MuxAlt2);    /* PORTB7 (pin 2) is configured as TPM1_CH0 */
   // seems TPM1 channel 0 needs following setting to distinguish TPM or CMP
+  // but not sure need it
+#if 0
   SIM->SOPT4 = ((SIM->SOPT4 &
     (~(SIM_SOPT4_TPM1CH0SRC_MASK)))                          /* Mask bits to zero which are setting */
       | SIM_SOPT4_TPM1CH0SRC(SOPT4_TPM1CH0SRC_TPM1)          /* TPM1 channel 0 input capture source select: TPM1_CH0 signal */
     );
+#endif
   /* Select the clock source for the TPM counter as MCGFLLCLK */
   CLOCK_SetTpmClock(1U);
 
   tpm_config_t tpmInfo;
   tpm_chnl_pwm_signal_param_t tpmParam[2];
 
-  /* Configure tpm params with frequency 24kHZ */
+  /* Configure tpm params with frequency 125kHZ */
   tpmParam[0].chnlNumber = (tpm_chnl_t)1;
   tpmParam[0].level = kTPM_LowTrue;
   tpmParam[0].dutyCyclePercent = 50;

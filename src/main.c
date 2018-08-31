@@ -50,6 +50,11 @@ int main(void)
   //initial devices
   lcd_initial();
 
+  PRINTF("Delay 2 secondes. \r\n");
+  for(int i = 0;i < 40000000;i++)
+  {
+      __NOP();
+  }
   /*
    * LCD layout
    * ==============
@@ -71,11 +76,7 @@ int main(void)
 
   while(1)
   {
-    PRINTF("Delay 2 secondes. \r\n");
-    for(int i = 0;i < 40000000;i++)
-    {
-      __NOP();
-    }
+
     if(!g_is_transmitting)
     {
       PRINTF("Start TPM1. \r\n");
@@ -88,6 +89,12 @@ int main(void)
       // next loop will enable it again
       rfid_disable_carrier();
       result = rfid_parse_data(&g_rfid_tag);
+#ifdef RFID_DBG_RECV
+      for(unsigned char i = 0;i < RFID_EM4100_DATA_BITS;i++)
+      {
+        PRINTF("INFO: Bit %d bit width: %d \r\n", i, g_rfid_pulse_width[i]);
+      }
+#endif
     }
 
     if(kStatus_Success == result)
