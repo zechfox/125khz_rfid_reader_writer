@@ -108,6 +108,10 @@ load:$(TARGET_BIN)
 	@$(JLINK_PATH)/JLinkExe -commanderscript $(LOAD_SCRIPT)
 	@rm $(LOAD_SCRIPT)
 
+dbg:
+	@echo "Enable Macro RFID_DBG"
+        CFLAGS += -DRFID_DBG
+
 dbg_recv:
 	@echo "Enable Macro RFID_DBG_RECV"
         CFLAGS += -DRFID_DBG_RECV

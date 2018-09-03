@@ -96,13 +96,14 @@ int main(void)
       }
 #endif
     }
-
+#ifdef RFID_DBG
     if(RECEIVE_DATA == g_recv_data_state)
     {
 	g_recv_data_state = SEEK_HEADER;
 	PRINTF("INFO: Received bit width: %d \r\n", g_rfid_pulse_width[0]);
 
     }
+#endif
 
     if(kStatus_Success == result)
     {
