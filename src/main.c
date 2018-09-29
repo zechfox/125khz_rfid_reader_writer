@@ -92,7 +92,7 @@ int main(void)
 #ifdef RFID_DBG_RECV
       for(unsigned char i = 0;i < RFID_EM4100_DATA_BITS;i++)
       {
-        PRINTF("INFO: Bit %d bit width: %d \r\n", i, g_rfid_pulse_width[i]);
+        PRINTF("DBG: Bit %d bit width: %d \r\n", i, g_rfid_pulse_width[i]);
       }
 #endif
     }
@@ -100,7 +100,7 @@ int main(void)
     if(RECEIVE_DATA == g_recv_data_state)
     {
 	g_recv_data_state = SEEK_HEADER;
-	PRINTF("INFO: Received bit width: %d \r\n", g_rfid_pulse_width[0]);
+	PRINTF("DBG: Received bit width: %d \r\n", g_rfid_pulse_width[0]);
 
     }
 #endif

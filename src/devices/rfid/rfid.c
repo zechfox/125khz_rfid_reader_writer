@@ -168,8 +168,8 @@ void RFID_RECEIVE_DATA_HANDLER(void)
 {
     static unsigned char valid_bits = 0;
     bool is_reverse_bit = 0; // don't reverse bit by default
-#ifdef RFID_DBG
     uint32_t capture_value = RFID_TRANSMIT_TPM->CONTROLS[RFID_RECEIVE_DATA_CHANNEL].CnV;
+#ifdef RFID_DBG
     g_rfid_pulse_width[0] = capture_value;
     g_recv_data_state = RECEIVE_DATA;
     return TPM_ClearStatusFlags(RFID_TRANSMIT_TPM, RFID_RECEIVE_DATA_CHANNEL_FLAG);

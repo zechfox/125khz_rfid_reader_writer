@@ -73,7 +73,7 @@ LDFLAGS += -T$(MKL02Z4_LD_SCRIPT)
 LDFLAGS += -Wl,--gc-sections
 LDFLAGS += --specs=nano.specs -lc -lnosys
 
-.PHONY: all clean load show dbg_recv dbg_parity
+.PHONY: all clean load show dbg dbg_recv dbg_parity
 
 all:$(TARGET_HEX) $(TARGET_BIN) 
 
@@ -108,21 +108,22 @@ load:$(TARGET_BIN)
 	@$(JLINK_PATH)/JLinkExe -commanderscript $(LOAD_SCRIPT)
 	@rm $(LOAD_SCRIPT)
 
-dbg:
-	@echo "Enable Macro RFID_DBG"
-        CFLAGS += -DRFID_DBG
+dbg: CFLAGS += -DRFID_DBG
 
-dbg_recv:
-	@echo "Enable Macro RFID_DBG_RECV"
-        CFLAGS += -DRFID_DBG_RECV
+dbg: all
 
-dbg_parity:
-	@echo "Enable Macro RFID_DBG_PARITiY."
-        CFLAGS += -DRFID_DBG_PARITiY
+dbg_recv: CFLAGS+=-DRFID_DBG_RECV
+
+dbg_recv: all
+
+dbg_parity: CFLAGS+=-DRFID_DBG_PARITiY
+
+dbg_parity: all
 
 $(OUT_DIR)/%.o:/%.c
 	@echo "CC $@ ..."
 	@mkdir -p $(dir $@)
+	@echo $(CFLAGS)
 	@$(CC) $(CFLAGS) -c -o $@ $<
 
 $(OUT_DIR)/%.o:/%.S
