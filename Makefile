@@ -120,9 +120,9 @@ dbg_parity: CFLAGS+=-DRFID_DBG_PARITiY
 
 dbg_parity: all
 
-dbg_pmw_output: CFLAGS+=-DDBG_PMW_OUTPUT
+dbg_pwm_output: CFLAGS+=-DDBG_PWM_OUTPUT
 
-dbg_pmw_output: all
+dbg_pwm_output: all
 
 $(OUT_DIR)/%.o:/%.c
 	@echo "CC $@ ..."

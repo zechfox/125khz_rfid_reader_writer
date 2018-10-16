@@ -423,7 +423,7 @@ bool initial_tpm(void)
 #ifdef USE_TPM
   CLOCK_EnableClock(kCLOCK_PortB);                           /* Port B Clock Gate Control: Clock enabled */
 
-#ifndef DBG_PMW_OUTPUT
+#ifndef DBG_PWM_OUTPUT
   // disable TPM1 CH1 as PMW
   PORT_SetPinMux(TPM1_CH1_PORT, TPM1_CH1_PIN_IDX, kPORT_MuxAlt2);    /* PORTB6 (pin 1) is configured as TPM1_CH1 */
 #endif
@@ -433,7 +433,7 @@ bool initial_tpm(void)
   CLOCK_SetTpmClock(1U);
 
   tpm_config_t tpmInfo;
-#ifndef DBG_PMW_OUTPUT
+#ifndef DBG_PWM_OUTPUT
   tpm_chnl_pwm_signal_param_t tpmParam[2];
 
   /* Configure tpm params with frequency 125kHZ */
@@ -461,7 +461,7 @@ bool initial_tpm(void)
 
   /* Initialize TPM module */
   TPM_Init(TPM1, &tpmInfo);
-#ifndef DBG_PMW_OUTPUT
+#ifndef DBG_PWM_OUTPUT
   TPM_SetupPwm(TPM1, tpmParam, 1U, kTPM_EdgeAlignedPwm, 125000U, TPM_SOURCE_CLOCK);
 #endif
   /* Setup input capture on a TPM channel */

@@ -73,7 +73,7 @@ int main(void)
 
   PRINTF("refresh LCD. \r\n");
   lcd_refresh_screen();
-#ifdef DBG_PMW_OUTPUT
+#ifdef DBG_PWM_OUTPUT
   GPIO_WritePinOutput(TPM1_CH1_PIN_PORT, TPM1_CH1_PIN_IDX, 1);
   PRINTF("Force PORTB6 output high! \r\n");
 #endif
