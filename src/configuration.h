@@ -27,8 +27,8 @@
 #define GPIO_A_OUTPUT_PINS 0b00000000000000000000001000000000
 
 #ifdef DBG_PWM_OUTPUT
-// PORTB6 as output, which used output PMW as TPM1_CH1
-#define GPIO_B_OUTPUT_PINS 0b00000000000000000000110001000000
+// PORTB5 as output, which used output PMW as TPM1_CH1
+#define GPIO_B_OUTPUT_PINS 0b00000000000000000010110000000000
 #else
 #define GPIO_B_OUTPUT_PINS 0b00000000000000000000110000000000
 #endif
@@ -83,24 +83,25 @@
 // TPM
 /* PORTB10 (pin 13) is configured as TPM0 CH1 */
 /* PORTB11 (pin 14) is configured as TPM0 CH0 */
-/* PORTB6 (pin 1) is configured as TPM1 CH1 */
-/* PORTB7 (pin 2) is configured as TPM1 CH0 */
+/* PORTB13 (pin 21) is configured as TPM1 CH1 */
+/* PORTA12 (pin 26) is configured as TPM1 CH0 */
 #ifndef USE_TPM
 #define USE_TPM
 // TPM port info
 #define TPM_SOURCE_CLOCK CLOCK_GetFreq(kCLOCK_McgFllClk)
 #define SOPT4_TPM1CH0SRC_TPM1         0x00u   /*!< TPM1 channel 0 input capture source select: TPM1_CH0 signal */
-#define TPM1_CH0_PORT (PORTB)
+#define TPM1_CH0_PORT (PORTA)
 #define TPM1_CH1_PORT (PORTB)
 #define TPM0_CH0_PORT (PORTB)
 #define TPM0_CH1_PORT (PORTB)
 // TPM pin info
 // use pin index, not pin number of chip
 #define TPM1_CH1_PIN_PORT (GPIOB)
+#define TPM1_CH0_PIN_PORT (GPIOA)
 #define TPM0_CH0_PIN_IDX (11U)
 #define TPM0_CH1_PIN_IDX (10U)
-#define TPM1_CH0_PIN_IDX (7U)
-#define TPM1_CH1_PIN_IDX (6U)
+#define TPM1_CH0_PIN_IDX (12U)
+#define TPM1_CH1_PIN_IDX (13U)
 
 // TPM function info
 #define TPM1_CH0 PMW

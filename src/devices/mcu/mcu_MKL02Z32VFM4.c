@@ -425,9 +425,9 @@ bool initial_tpm(void)
 
 #ifndef DBG_PWM_OUTPUT
   // disable TPM1 CH1 as PMW
-  PORT_SetPinMux(TPM1_CH1_PORT, TPM1_CH1_PIN_IDX, kPORT_MuxAlt2);    /* PORTB6 (pin 1) is configured as TPM1_CH1 */
+  PORT_SetPinMux(TPM1_CH1_PORT, TPM1_CH1_PIN_IDX, kPORT_MuxAlt2);    /* PORTB13 (pin 21) is configured as TPM1_CH1 */
 #endif
-  PORT_SetPinMux(TPM1_CH0_PORT, TPM1_CH0_PIN_IDX, kPORT_MuxAlt2);    /* PORTB7 (pin 2) is configured as TPM1_CH0 */
+  PORT_SetPinMux(TPM1_CH0_PORT, TPM1_CH0_PIN_IDX, kPORT_MuxAlt2);    /* PORTA12 (pin 26) is configured as TPM1_CH0 */
 
   /* Select the clock source for the TPM counter as MCGFLLCLK */
   CLOCK_SetTpmClock(1U);
