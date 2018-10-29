@@ -458,6 +458,7 @@ bool initial_tpm(void)
    * tpmInfo.triggerSource = kTPM_TriggerSource_External;
    */
   TPM_GetDefaultConfig(&tpmInfo);
+  tpmInfo.prescale = kTPM_Prescale_Divide_1;
 
   /* Initialize TPM module */
   TPM_Init(TPM1, &tpmInfo);

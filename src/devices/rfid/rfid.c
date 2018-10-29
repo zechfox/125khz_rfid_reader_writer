@@ -13,6 +13,9 @@ recvDataState g_recv_data_state = SEEK_HEADER;
 unsigned char g_rfid_bits_buffer[RFID_EM4100_DATA_BITS];
 rfidTag g_rfid_tag;
 unsigned char g_rfid_pulse_width[RFID_EM4100_DATA_BITS];
+#ifdef RFID_DBG 
+unsigned int g_rfid_dbg_counter = 0;
+#endif
 
 // initial rfid
 void rfid_init()
@@ -47,7 +50,7 @@ void rfid_enable_carrier()
   if(READ == g_work_mode)
   {
     // set counter start at maxmium
-    TPM1->MOD = 0xFFFF;
+    //TPM1->MOD = 0xFFFF;
 
     /* Enable channel interrupt when the second edge is detected */
     TPM_EnableInterrupts(RFID_TRANSMIT_TPM, RFID_RECEIVE_DATA_CHANNEL_INTERRUPT_ENABLE);
@@ -170,7 +173,7 @@ void RFID_RECEIVE_DATA_HANDLER(void)
     bool is_reverse_bit = 0; // don't reverse bit by default
     uint32_t capture_value = RFID_TRANSMIT_TPM->CONTROLS[RFID_RECEIVE_DATA_CHANNEL].CnV;
 #ifdef RFID_DBG
-    g_rfid_pulse_width[0] = capture_value;
+    g_rfid_dbg_counter = capture_value;
     g_recv_data_state = RECEIVE_DATA;
     return TPM_ClearStatusFlags(RFID_TRANSMIT_TPM, RFID_RECEIVE_DATA_CHANNEL_FLAG);
 #endif

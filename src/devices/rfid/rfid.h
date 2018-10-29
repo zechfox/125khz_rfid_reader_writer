@@ -35,7 +35,9 @@ extern recvDataState g_recv_data_state;
 extern unsigned char g_rfid_bits_buffer[RFID_EM4100_DATA_BITS];
 extern unsigned char g_rfid_pulse_width[RFID_EM4100_DATA_BITS];
 extern rfidTag g_rfid_tag;
-
+#ifdef RFID_DBG
+extern unsigned int g_rfid_dbg_counter;
+#endif
 void rfid_enable_carrier();
 void rfid_disable_carrier();
 status_t rfid_parity_check();

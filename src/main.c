@@ -75,7 +75,7 @@ int main(void)
   lcd_refresh_screen();
 #ifdef DBG_PWM_OUTPUT
   GPIO_WritePinOutput(TPM1_CH1_PIN_PORT, TPM1_CH1_PIN_IDX, 1);
-  PRINTF("Force PORTB6 output high! \r\n");
+  PRINTF("Force pin of TPM1_CH1 output high! \r\n");
 #endif
 
   while(1)
@@ -104,7 +104,7 @@ int main(void)
     if(RECEIVE_DATA == g_recv_data_state)
     {
 	g_recv_data_state = SEEK_HEADER;
-	PRINTF("DBG: Received bit width: %d \r\n", g_rfid_pulse_width[0]);
+	PRINTF("DBG: Received bit width: %d \r\n", g_rfid_dbg_counter);
 
     }
 #endif
