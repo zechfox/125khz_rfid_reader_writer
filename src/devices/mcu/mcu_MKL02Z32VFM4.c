@@ -427,7 +427,6 @@ bool initial_tpm(void)
   // disable TPM1 CH1 as PMW
   PORT_SetPinMux(TPM1_CH1_PORT, TPM1_CH1_PIN_IDX, kPORT_MuxAlt2);    /* PORTB13 (pin 21) is configured as TPM1_CH1 */
 #endif
-  PORT_SetPinMux(TPM1_CH0_PORT, TPM1_CH0_PIN_IDX, kPORT_MuxAlt2);    /* PORTA12 (pin 26) is configured as TPM1_CH0 */
 
   /* Select the clock source for the TPM counter as MCGFLLCLK */
   CLOCK_SetTpmClock(1U);
@@ -465,8 +464,6 @@ bool initial_tpm(void)
 #ifndef DBG_PWM_OUTPUT
   TPM_SetupPwm(TPM1, tpmParam, 1U, kTPM_EdgeAlignedPwm, 125000U, TPM_SOURCE_CLOCK);
 #endif
-  /* Setup input capture on a TPM channel */
-  TPM_SetupInputCapture(TPM1, kTPM_Chnl_0, kTPM_RiseAndFallEdge);
 
 #endif
   PRINTF("Initial MCU TPM finished. \r\n");

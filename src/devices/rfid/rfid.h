@@ -24,6 +24,7 @@ typedef enum Work_mode {
 } workMode;
 
 typedef enum Recv_data_state {
+    DETERMINE_PERIOD,
     SEEK_HEADER,
     RECEIVE_DATA,
     DATA_READY

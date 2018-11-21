@@ -33,7 +33,8 @@
 #define GPIO_B_OUTPUT_PINS 0b00000000000000000000110000000000
 #endif
 
-#define GPIO_A_INPUT_PINS 0b00000000000000000000000000000000
+#define GPIO_A_INPUT_PINS 0b00000000000000000001000000000000
+// PORTB12 as input pin
 #define GPIO_B_INPUT_PINS 0b00000000000000000000000000000000
 
 //SPI
@@ -81,26 +82,16 @@
 #endif
 
 // TPM
-/* PORTB10 (pin 13) is configured as TPM0 CH1 */
-/* PORTB11 (pin 14) is configured as TPM0 CH0 */
 /* PORTB13 (pin 21) is configured as TPM1 CH1 */
-/* PORTA12 (pin 26) is configured as TPM1 CH0 */
 #ifndef USE_TPM
 #define USE_TPM
 // TPM port info
 #define TPM_SOURCE_CLOCK CLOCK_GetFreq(kCLOCK_McgFllClk)
 #define SOPT4_TPM1CH0SRC_TPM1         0x00u   /*!< TPM1 channel 0 input capture source select: TPM1_CH0 signal */
-#define TPM1_CH0_PORT (PORTA)
 #define TPM1_CH1_PORT (PORTB)
-#define TPM0_CH0_PORT (PORTB)
-#define TPM0_CH1_PORT (PORTB)
 // TPM pin info
 // use pin index, not pin number of chip
 #define TPM1_CH1_PIN_PORT (GPIOB)
-#define TPM1_CH0_PIN_PORT (GPIOA)
-#define TPM0_CH0_PIN_IDX (11U)
-#define TPM0_CH1_PIN_IDX (10U)
-#define TPM1_CH0_PIN_IDX (12U)
 #define TPM1_CH1_PIN_IDX (13U)
 
 // TPM function info
@@ -142,22 +133,22 @@
 // 1 tpm for transmit 
 // 1 tpm for modulation 
 
-// TPM1 use 2 channel, 1 for trasmit carrier, 1 for receive data 
+// TPM1 use 1 channel for transmit carrier
 #define RFID_TRANSMIT_TPM TPM1
 // TPM0 used for modulation
 #define RFID_MODULE_TPM TPM0
 #define RFID_CARRIER_FEQ 125000U
 
-/* TPM channel 0 used for input capture */
-#define RFID_RECEIVE_DATA_CHANNEL kTPM_Chnl_0
+/* Interrupt number and interrupt handler for the RFID used */
+#define RFID_RECEIVER_DATA_INTERRUPT_NUMBER PORTA_IRQn
+#define RFID_RECEIVER_DATA_HANDLER PORTA_IRQHandler
+#define RFID_TRANSMITTER_INTERRUPT_NUMBER TPM1_IRQn
+#define RFID_TRANSMITTER_HANDLER TPM1_IRQHandler
 
-/* Interrupt number and interrupt handler for the TPM instance used */
-#define RFID_RECEIVE_DATA_INTERRUPT_NUMBER TPM1_IRQn
-#define RFID_RECEIVE_DATA_HANDLER TPM1_IRQHandler
-
-/* Interrupt to enable and flag to read; depends on the TPM channel used */
-#define RFID_RECEIVE_DATA_CHANNEL_INTERRUPT_ENABLE kTPM_Chnl0InterruptEnable
-#define RFID_RECEIVE_DATA_CHANNEL_FLAG kTPM_Chnl0Flag
+// RFID receive pin
+#define RFID_RECEIVER_DATA_PORT PORTA
+#define RFID_RECEIVER_DATA_GPIO_PORT GPIOA
+#define RFID_RECEIVER_DATA_GPIO_INDEX 12
 
 // used for receive rfid data
 #define RFID_HEADER_BITS 9U
@@ -166,6 +157,15 @@
 #define RFID_MANCHE_PULSE_WIDTH  111
 #define RFID_MANCHE_PULSE_BIAS  20
 
+#define RFID_GLITCH_CYCLE  4
+#define RFID_MAX_COUNTER 128
+
+#define RFID_CYCLE_OFFSET 3
+#define RFID_CYCLE_16 16
+#define RFID_CYCLE_32 32
+#define RFID_CYCLE_64 64
+#define RFID_CYCLE_PSK_UPBOUND (RFID_CYCLE_16 + RFID_CYCLE_OFFSET)
+#define RFID_CYCLE_PSK_DOWNBOUND (RFID_CYCLE_16 - RFID_CYCLE_OFFSET)
 // used for parse rfid data
 // total 11 groups(raws) bit, first 10 group for data, 
 // the last one for columns parity
