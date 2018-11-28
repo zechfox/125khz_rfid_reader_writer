@@ -43,6 +43,8 @@ void rfid_init()
 
   g_rfid_tag.version_number = 0xFF;
   g_rfid_tag.tag_id = 0xFFFFFFFF;
+  g_rfid_tag.encode_scheme = UNKNOWN;
+  g_rfid_tag.bit_length = 0xFF;
 
   PRINTF("RFID Initialized. \r\n");
 

@@ -7,6 +7,7 @@
 #include "configuration.h"
 
 typedef enum encode_scheme {
+    UNKNOWN,
     MANCHESTER,
     BIPHASE,
     PSK
@@ -33,7 +34,6 @@ typedef enum Work_mode {
     WRITE
 } workMode;
 
-extern bool g_is_transmitting;
 extern workMode g_work_mode;
 extern readerState g_reader_state;
 extern unsigned char g_rfid_bits_buffer[RFID_EM4100_DATA_BITS];
