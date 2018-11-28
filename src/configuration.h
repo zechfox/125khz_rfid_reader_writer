@@ -94,6 +94,8 @@
 #define TPM1_CH1_PIN_PORT (GPIOB)
 #define TPM1_CH1_PIN_IDX (13U)
 
+#define TPM1_CH1_CHANNEL1_FLAG kTPM_Chnl1Flag
+
 // TPM function info
 #define TPM1_CH0 PMW
 #define TPM1_CH1 PMW
@@ -135,6 +137,7 @@
 
 // TPM1 use 1 channel for transmit carrier
 #define RFID_TRANSMIT_TPM TPM1
+#define RFID_TRNSIMIT_INTERRUPT_FLAG TPM1_CH1_CHANNEL1_FLAG
 // TPM0 used for modulation
 #define RFID_MODULE_TPM TPM0
 #define RFID_CARRIER_FEQ 125000U
@@ -153,12 +156,15 @@
 // used for receive rfid data
 #define RFID_HEADER_BITS 9U
 #define RFID_EM4100_DATA_BITS 64U
+// 
+#define RFID_DETECT_RISE_EDGE_NUMBER (RFID_EM4100_DATA_BITS * 2)
 #define RFID_MANCHE_REVERSE_PULSE_WIDTH 333
 #define RFID_MANCHE_PULSE_WIDTH  111
 #define RFID_MANCHE_PULSE_BIAS  20
 
 #define RFID_GLITCH_CYCLE  4
 #define RFID_MAX_COUNTER 128
+#define RFID_TAG_LEAVE_COUNTER 10000 
 
 #define RFID_CYCLE_OFFSET 3
 #define RFID_CYCLE_16 16

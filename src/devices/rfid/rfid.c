@@ -7,13 +7,15 @@
 #include "configuration.h"
 #include "rfid.h"
 
-bool g_is_transmitting = false;
 workMode g_work_mode = READ;
-recvDataState g_recv_data_state = SEEK_HEADER;
+readerState g_reader_state = IDLE;
 unsigned char g_rfid_bits_buffer[RFID_EM4100_DATA_BITS];
 rfidTag g_rfid_tag;
-unsigned char g_rfid_pulse_width[RFID_EM4100_DATA_BITS];
+#ifdef RFID_DBG_RECV
+unsigned char g_rfid_rise_edge_width[RFID_DETECT_RISE_EDGE_NUMBER];
+#endif
 unsigned char g_rfid_carrier_cycle_counter = 0;
+bool g_rfid_count_carrier_cycle_flag = false;
 unsigned char g_rfid_bit_period = 0;
 #ifdef RFID_DBG 
 unsigned int g_rfid_dbg_counter = 0;
@@ -32,17 +34,40 @@ void rfid_init()
   {
     g_rfid_bits_buffer[i] = 0x0;
   }
-
-  for(unsigned char i = 0;i < RFID_EM4100_DATA_BITS;i++)
+#ifdef RFID_DBG_RECV
+  for(unsigned char i = 0;i < RFID_DETECT_RISE_EDGE_NUMBER;i++)
   {
-    g_rfid_pulse_width[i] = 0x0;
+    g_rfid_rise_edge_width[i] = 0x0;
   }
+#endif
 
   g_rfid_tag.version_number = 0xFF;
   g_rfid_tag.tag_id = 0xFFFFFFFF;
 
+  PRINTF("RFID Initialized. \r\n");
 
   return;
+}
+
+// reset rfid state same as startup
+void rfid_reset()
+{
+    PRINTF("RFID Resetting. \r\n");
+
+    rfid_disable_carrier();
+    g_work_mode = READ;
+    g_reader_state = IDLE;
+    g_rfid_carrier_cycle_counter = 0;
+    g_rfid_bit_period = 0;
+#ifdef RFID_DBG 
+    unsigned int g_rfid_dbg_counter = 0;
+#endif
+
+    rfid_init();
+
+    PRINTF("RFID Reseted. \r\n");
+
+    return;
 }
 // enable transmit 125khz carrier
 // set carrier used gpio pin
@@ -55,13 +80,16 @@ void rfid_enable_carrier()
     PORT_SetPinInterruptConfig(RFID_RECEIVER_DATA_PORT, RFID_RECEIVER_DATA_GPIO_INDEX, kPORT_InterruptRisingEdge);
 
     /* Enable at the NVIC */
-    EnableIRQ(RFID_RECEIVE_DATA_INTERRUPT_NUMBER);
+    // gpio interrupt
+    EnableIRQ(RFID_RECEIVER_DATA_INTERRUPT_NUMBER);
+    // tpm interrupt
+    EnableIRQ(RFID_TRANSMITTER_INTERRUPT_NUMBER);
   }
 
   TPM_StartTimer(RFID_TRANSMIT_TPM, kTPM_SystemClock);
-  g_is_transmitting = true;
-  g_recv_data_state = DETERMINE_PERIOD;
-  return;
+  g_reader_state = DETECT_PERIOD;
+  PRINTF("RFID 125kHz Carrier Enabled. \r\n");
+ return;
 }
 
 // disable transmit 125khz carrier
@@ -69,7 +97,10 @@ void rfid_enable_carrier()
 void rfid_disable_carrier()
 {
     TPM_StopTimer(RFID_TRANSMIT_TPM);
-    g_is_transmitting = false;
+    DisableIRQ(RFID_RECEIVER_DATA_INTERRUPT_NUMBER);
+    DisableIRQ(RFID_TRANSMITTER_INTERRUPT_NUMBER);
+    g_reader_state = IDLE;
+    PRINTF("RFID 125kHz Carrier Disabled. \r\n");
     return;
 }
 
@@ -166,6 +197,23 @@ status_t rfid_parse_data(rfidTag *rfid_tag_ptr)
     return result;
 }
 
+void RFID_TRANSMITTER_HANDLER(void)
+{
+    if(g_rfid_count_carrier_cycle_flag)
+    {
+	g_rfid_carrier_cycle_counter++;
+    }
+
+    if(g_rfid_carrier_cycle_counter > RFID_TAG_LEAVE_COUNTER)
+    {
+	// reset rfid
+	g_reader_state = RESET;
+    }
+	
+
+    return TPM_ClearStatusFlags(RFID_TRANSMIT_TPM, RFID_TRNSIMIT_INTERRUPT_FLAG);
+}
+
 void RFID_RECEIVER_DATA_HANDLER(void)
 {
     static unsigned char max_rise_edge_gap = 0;
@@ -176,17 +224,21 @@ void RFID_RECEIVER_DATA_HANDLER(void)
     // handle rise edge interrupt of rfid receiver pin 
     if(pin_mask & (1 << RFID_RECEIVER_DATA_GPIO_INDEX))
     {
+	// detect first rise edge,
 	// start count carrier cycle
 	if(0 == g_rfid_carrier_cycle_counter)
 	{
 	    g_rfid_count_carrier_cycle_flag = true; 
 	}
-	// just ignore the glitch
-	else if(g_rfid_carrier_cycle_counter > RFID_GLITCH_CYCLE)
+	//  
+	else
 	{
-	    switch(g_recv_data_state)
+	    switch(g_reader_state)
 	    {
-		case DETERMINE_PERIOD:
+		case DETECT_PERIOD:
+#ifdef RFID_DBG_RECV
+		    g_rfid_rise_edge_width[rise_edge_counter] = g_rfid_carrier_cycle_counter;
+#endif
 		    rise_edge_counter++;
 
 		    if(min_rise_edge_gap > g_rfid_carrier_cycle_counter)
@@ -198,51 +250,60 @@ void RFID_RECEIVER_DATA_HANDLER(void)
 			max_rise_edge_gap = g_rfid_carrier_cycle_counter;
 		    }
 
-		    if(rise_edge_counter > RFID_MAX_COUNTER)
+		    if(rise_edge_counter > RFID_DETECT_RISE_EDGE_NUMBER)
 		    {
 			rise_edge_counter = 0;
-			unsigned max_gap_upbound = max_rise_edge_gap + RFID_CYCLE_OFFSET;
-			unsigned max_gap_downbound = max_rise_edge_gap - RFID_CYCLE_OFFSET;
-			// max rise edge gap = 2 * min rise edge gap, biploar
-			if(max_gap_upbound > 
-				(max_rise_edge_gap << 1) >
-				max_gap_downbound)
-			{
+			unsigned int max_gap_upbound = max_rise_edge_gap + RFID_CYCLE_OFFSET;
+			unsigned int max_gap_downbound = max_rise_edge_gap - RFID_CYCLE_OFFSET;
+			unsigned int half_max_rise_edge_gap = max_rise_edge_gap << 1;
+			unsigned int one_half_min_rise_edge_gap = 3 * min_rise_edge_gap >> 1;
 
+			// min rise edge gap is the bit length cycle
+			g_rfid_tag.bit_length = min_rise_edge_gap;
+			// max rise edge gap = 2 * min rise edge gap, biphase 
+			if((max_gap_upbound > half_max_rise_edge_gap)
+				&& (max_gap_downbound < half_max_rise_edge_gap))
+			{
+			    g_rfid_tag.encode_scheme = BIPHASE;
 			}
 			// max rise edge gap = 1.5 min rise edge gap, menchester or psk
-			else if(max_gap_upbound > 
-				(3 * (min_rise_edge_gap >> 1)) >
-				max_gap_downbound)
+			else if((max_gap_upbound > one_half_min_rise_edge_gap)
+				&& (one_half_min_rise_edge_gap > max_gap_downbound))
 			{
-
-
 			    // min rise edge gap = 16, psk
-			    if(RFID_CYCLE_PSK_UPBOUND > min_rise_edge_gap > RFID_CYCLE_PSK_DOWNBOUND)
+			    if((RFID_CYCLE_PSK_UPBOUND > min_rise_edge_gap)
+				    && (min_rise_edge_gap > RFID_CYCLE_PSK_DOWNBOUND))
 			    {
-
+				g_rfid_tag.encode_scheme = PSK;
+			    }
+			    else
+			    {
+				g_rfid_tag.encode_scheme = MANCHESTER;
 			    }
 			}
+			// we already know the bit length, sync head by it.
+			g_reader_state = SYNC_HEAD;
+#ifdef RFID_DBG_RECV
+			// terminate reader for debug reason 
+			g_reader_state = PARSE_DATA;
+#endif
 		    }
 		    break;
 		case SYNC_HEAD:
 
 		    break;
 
-		case RECEIVE_DATA:
+		case READ_DATA:
 
 		    break;
 
-		case DATA_READY:
-
-		    break;
-		    // something wrong
+		// something wrong, other state won't here.
 		default:
 		    break;
 	    }
 	    // count from current rise edge to next one.
 	    g_rfid_carrier_cycle_counter = 0;
-	} //else if(g_rfid_carrier_cycle_counter > RFID_GLITCH_CYCLE)
+	} //else
     } //if(pin_mask & (1 << RFID_RECEIVER_DATA_GPIO_INDEX))
 
     // just clear what interrupts

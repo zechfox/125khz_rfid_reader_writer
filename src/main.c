@@ -77,37 +77,37 @@ int main(void)
   GPIO_WritePinOutput(TPM1_CH1_PIN_PORT, TPM1_CH1_PIN_IDX, 1);
   PRINTF("Force pin of TPM1_CH1 output high! \r\n");
 #endif
+  rfid_init();
 
   while(1)
   {
 
-    if(!g_is_transmitting)
+    if(IDLE == g_reader_state)
     {
-      PRINTF("Start TPM1. \r\n");
-      rfid_enable_carrier();
+	rfid_enable_carrier();
     }
-    
-    if(DATA_READY == g_recv_data_state)
+    else if(RESET == g_reader_state)
+    {
+	rfid_reset();
+    }
+    else if(PARSE_DATA == g_reader_state)
     {
       // got enough data, disable carrier
       // next loop will enable it again
       rfid_disable_carrier();
-      result = rfid_parse_data(&g_rfid_tag);
 #ifdef RFID_DBG_RECV
-      for(unsigned char i = 0;i < RFID_EM4100_DATA_BITS;i++)
-      {
-        PRINTF("DBG: Bit %d bit width: %d \r\n", i, g_rfid_pulse_width[i]);
-      }
-#endif
-    }
-#ifdef RFID_DBG
-    if(RECEIVE_DATA == g_recv_data_state)
-    {
-	g_recv_data_state = SEEK_HEADER;
-	PRINTF("DBG: Received bit width: %d \r\n", g_rfid_dbg_counter);
 
-    }
+      for(unsigned char i = 0;i < RFID_DETECT_RISE_EDGE_NUMBER;i++)
+      {
+        PRINTF("DBG: Rise Edge No.%d width: %d \r\n", i, g_rfid_rise_edge_width[i]);
+      }
+
+      PRINTF("DBG: Detected Tag bit length: %d cycle \r\n", g_rfid_tag.bit_length);
+      PRINTF("DBG: Detected Tag encode scheme %d \r\n", g_rfid_tag.encode_scheme);
 #endif
+      result = rfid_parse_data(&g_rfid_tag);
+    }
+
 
     if(kStatus_Success == result)
     {
