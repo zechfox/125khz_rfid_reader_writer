@@ -80,7 +80,8 @@ void rfid_enable_carrier()
   {
     /* Enable RFID receiver interrupt */
     PORT_SetPinInterruptConfig(RFID_RECEIVER_DATA_PORT, RFID_RECEIVER_DATA_GPIO_INDEX, kPORT_InterruptRisingEdge);
-
+    /* Enable TPM Channel1 interrupt */
+    TPM_EnableInterrupts(RFID_TRANSMIT_TPM, RFID_TRANSMITTER_INTERRUPT_ENABLE);
     /* Enable at the NVIC */
     // gpio interrupt
     EnableIRQ(RFID_RECEIVER_DATA_INTERRUPT_NUMBER);
@@ -201,6 +202,7 @@ status_t rfid_parse_data(rfidTag *rfid_tag_ptr)
 
 void RFID_TRANSMITTER_HANDLER(void)
 {
+
     if(g_rfid_count_carrier_cycle_flag)
     {
 	g_rfid_carrier_cycle_counter++;
@@ -223,6 +225,7 @@ void RFID_RECEIVER_DATA_HANDLER(void)
     static unsigned char rise_edge_counter = 0;
 
     unsigned int pin_mask = PORT_GetPinsInterruptFlags(RFID_RECEIVER_DATA_PORT);
+
     // handle rise edge interrupt of rfid receiver pin 
     if(pin_mask & (1 << RFID_RECEIVER_DATA_GPIO_INDEX))
     {
@@ -289,6 +292,9 @@ void RFID_RECEIVER_DATA_HANDLER(void)
 			// terminate reader for debug reason 
 			g_reader_state = PARSE_DATA;
 #endif
+			max_rise_edge_gap = 0;
+			min_rise_edge_gap = 0xff;
+			rise_edge_counter = 0;
 		    }
 		    break;
 		case SYNC_HEAD:

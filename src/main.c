@@ -104,6 +104,7 @@ int main(void)
 
       PRINTF("DBG: Detected Tag bit length: %d cycle \r\n", g_rfid_tag.bit_length);
       PRINTF("DBG: Detected Tag encode scheme %d \r\n", g_rfid_tag.encode_scheme);
+      g_reader_state = RESET;
 #endif
       result = rfid_parse_data(&g_rfid_tag);
     }
