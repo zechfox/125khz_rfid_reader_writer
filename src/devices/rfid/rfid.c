@@ -1,5 +1,6 @@
 
 #include <stdio.h>
+#include <limits.h>
 
 #include "fsl_debug_console.h"
 #include <fsl_tpm.h>
@@ -10,6 +11,7 @@
 workMode g_work_mode = READ;
 readerState g_reader_state = IDLE;
 unsigned char g_rfid_bits_buffer[RFID_EM4100_DATA_BITS];
+unsigned int g_rfid_bits[RFID_EM4100_DATA_BITS/ CHAR_BIT * sizeof (int)];
 rfidTag g_rfid_tag;
 #ifdef RFID_DBG_RECV
 unsigned char g_rfid_rise_edge_width[RFID_DETECT_RISE_EDGE_NUMBER];
@@ -34,6 +36,8 @@ void rfid_init()
   {
     g_rfid_bits_buffer[i] = 0x0;
   }
+  g_rfid_bits[0] = 0x1FF;
+  g_rfid_bits[1] = 0;
 #ifdef RFID_DBG_RECV
   for(unsigned char i = 0;i < RFID_DETECT_RISE_EDGE_NUMBER;i++)
   {
@@ -223,6 +227,11 @@ void RFID_RECEIVER_DATA_HANDLER(void)
     static unsigned char max_rise_edge_gap = 0;
     static unsigned char min_rise_edge_gap = 0xff;
     static unsigned char rise_edge_counter = 0;
+    static unsigned char last_detected_gap = 0;
+    static unsigned char received_bits = 9;
+
+    unsigned char gap_upbound = 0;
+    unsigned char gap_downbound = 0; 
 
     unsigned int pin_mask = PORT_GetPinsInterruptFlags(RFID_RECEIVER_DATA_PORT);
 
@@ -298,10 +307,95 @@ void RFID_RECEIVER_DATA_HANDLER(void)
 		    }
 		    break;
 		case SYNC_HEAD:
+		    gap_upbound = last_detected_gap + RFID_CYCLE_OFFSET;
+		    gap_downbound = last_detected_gap - RFID_CYCLE_OFFSET;
+
+		    // same as previous gap
+		    if((gap_upbound > g_rfid_carrier_cycle_counter)
+			    && (g_rfid_carrier_cycle_counter > gap_downbound))
+		    {
+			rise_edge_counter++;
+			if(MANCHESTER == g_rfid_tag.encode_scheme 
+				&& (rise_edge_counter >=9))
+			{
+			    // sync head by MANCHESTER 
+			    g_reader_state = READ_DATA;
+			    last_detected_gap = 0;
+			}
+			else if(BIPHASE == g_rfid_tag.encode_scheme
+				&& (rise_edge_counter >=5))
+			{
+			    // sync head by BIPHASE
+			    g_reader_state = READ_DATA;
+			    last_detected_gap = 0;
+			}
+		    }
+		    // not same as previous one
+		    else
+		    {
+			rise_edge_counter = 0;
+		    }
+
+		    // replace by new one
+		    last_detected_gap = g_rfid_carrier_cycle_counter;
 
 		    break;
 
 		case READ_DATA:
+
+		    if(MANCHESTER == g_rfid_tag.encode_scheme)
+		    {
+			gap_upbound = g_rfid_tag.bit_length + RFID_CYCLE_OFFSET;
+			gap_downbound = g_rfid_tag.bit_length - RFID_CYCLE_OFFSET;
+			// 1 bit cycle, receive bit same as previous
+			// use one bound for easy
+			if(g_rfid_carrier_cycle_counter < gap_upbound )
+			{
+			    // first 32bits or second 32bits
+			    unsigned char index_1 = received_bits / 32;
+			    unsigned char index_2 = (received_bits - 1) / 32;
+			    // determine current bit by previous one
+			    g_rfid_bits[index_1] = g_rfid_bits[index_1] | ((g_rfid_bits[index_2] & (1 << (received_bits - 1)) << received_bits));
+			    received_bits++;
+			}
+			// 1.5 bit cycle, receive 2bit, one same as previous, the other is reversed
+			// use one bound for easy
+			else if(g_rfid_carrier_cycle_counter < (3 * (g_rfid_tag.bit_length >> 2)))
+			{
+			    /* first received bit */
+			    // first 32bits or second 32bits
+			    unsigned char index_1 = received_bits / 32;
+			    unsigned char index_2 = (received_bits - 1) / 32;
+			    // determine current bit by previous one
+			    g_rfid_bits[index_1] = g_rfid_bits[index_1] | ((g_rfid_bits[index_2] & (1 << (received_bits - 1))) << received_bits);
+			    received_bits++;
+
+			    /* second received bit */
+			    // first 32bits or second 32bits
+			    index_1 = received_bits / 32;
+			    index_2 = (received_bits - 1) / 32;
+			    // determine current bit by previous one
+			    g_rfid_bits[index_1] = g_rfid_bits[index_1] | (~(g_rfid_bits[index_2] & (1 << (received_bits - 1))) << received_bits);
+			    received_bits++;
+
+			}
+			
+		    }
+		    else if(BIPHASE == g_rfid_tag.encode_scheme)
+		    {
+
+		    }
+		    else
+		    {
+			// only manchester and biphase supported, treat psk as unknown
+			g_reader_state = RESET;
+		    }
+
+		    if(received_bits >= RFID_EM4100_DATA_BITS)
+		    {
+			g_reader_state = PARSE_DATA;
+			received_bits = 9;
+		    }
 
 		    break;
 
