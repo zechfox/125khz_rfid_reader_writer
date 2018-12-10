@@ -117,6 +117,23 @@ status_t rfid_parity_check()
     unsigned char column_parity[4] = {0, 0, 0, 0};
     unsigned char *check_bits_ptr = &g_rfid_bits_buffer[RFID_HEADER_BITS];
 
+    // Bit31 .... Bit0
+    // D18 D17 D16 P3 D15 D14 D13 D12 P2 D11 D10 D09 D08 P1 D07 D06 D05 P0 D04 D03 D02 D01 D00 1 1 1 1 1 1 1 1 1 
+    // Bit63 ...  Bit32
+    // S0 PC3 PC2 PC1 PC0 P9 D39 D38 D37 D36 P8 D35 D34 D33 D32 P7 D31 D30 D29 D28 P6 D27 D26 D25 D24 P5 D23 D22 D21 D20 P4 D19
+    // 1 1 1 1 1 1 1 1 1  ---> 9 bit header
+    // D00 D01 D02 D03 P0
+    // D04 D05 D06 D07 P1
+    // D08 D09 D10 D11 P2
+    // D12 D13 D14 D15 P3
+    // D16 D17 D18 D19 P4
+    // D20 D21 D22 D23 P5
+    // D24 D25 D26 D27 P6
+    // D28 D29 D30 D31 P7
+    // D32 D33 D34 D35 P8
+    // D36 D37 D38 D39 P9
+    // PC0 PC1 PC2 PC3 S0 ---> stop bit 0
+
 #ifdef RFID_DBG_PARITiY
     unsigned char bit_counts = 0;
 #endif
@@ -351,33 +368,18 @@ void RFID_RECEIVER_DATA_HANDLER(void)
 			// use one bound for easy
 			if(g_rfid_carrier_cycle_counter < gap_upbound )
 			{
-			    // first 32bits or second 32bits
-			    unsigned char index_1 = received_bits / 32;
-			    unsigned char index_2 = (received_bits - 1) / 32;
-			    // determine current bit by previous one
-			    g_rfid_bits[index_1] = g_rfid_bits[index_1] | ((g_rfid_bits[index_2] & (1 << (received_bits - 1)) << received_bits));
+                            g_rfid_bits_buffer[received_bits] = g_rfid_bits_buffer[received_bits - 1];
 			    received_bits++;
 			}
 			// 1.5 bit cycle, receive 2bit, one same as previous, the other is reversed
 			// use one bound for easy
 			else if(g_rfid_carrier_cycle_counter < (3 * (g_rfid_tag.bit_length >> 2)))
 			{
-			    /* first received bit */
-			    // first 32bits or second 32bits
-			    unsigned char index_1 = received_bits / 32;
-			    unsigned char index_2 = (received_bits - 1) / 32;
-			    // determine current bit by previous one
-			    g_rfid_bits[index_1] = g_rfid_bits[index_1] | ((g_rfid_bits[index_2] & (1 << (received_bits - 1))) << received_bits);
+			    g_rfid_bits_buffer[received_bits] = g_rfid_bits_buffer[received_bits - 1];
 			    received_bits++;
 
-			    /* second received bit */
-			    // first 32bits or second 32bits
-			    index_1 = received_bits / 32;
-			    index_2 = (received_bits - 1) / 32;
-			    // determine current bit by previous one
-			    g_rfid_bits[index_1] = g_rfid_bits[index_1] | (~(g_rfid_bits[index_2] & (1 << (received_bits - 1))) << received_bits);
+			    g_rfid_bits_buffer[received_bits] = 0x1 & (g_rfid_bits_buffer[received_bits - 1] + 1);
 			    received_bits++;
-
 			}
 			
 		    }
