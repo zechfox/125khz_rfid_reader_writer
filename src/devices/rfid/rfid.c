@@ -94,7 +94,7 @@ void rfid_enable_carrier()
   }
 
   TPM_StartTimer(RFID_TRANSMIT_TPM, kTPM_SystemClock);
-  g_reader_state = DETECT_PERIOD;
+  g_reader_state = WAIT_STABLE;
   PRINTF("RFID 125kHz Carrier Enabled. \r\n");
  return;
 }
@@ -266,6 +266,15 @@ void RFID_RECEIVER_DATA_HANDLER(void)
 	{
 	    switch(g_reader_state)
 	    {
+		case WAIT_STABLE:
+		    rise_edge_counter++;
+		    if(rise_edge_counter > 100)
+		    {
+			g_reader_state = DETECT_PERIOD;
+			rise_edge_counter = 0;
+			g_rfid_carrier_cycle_counter = 0;
+		    }
+		    break;
 		case DETECT_PERIOD:
 #ifdef RFID_DBG_RECV
 		    g_rfid_rise_edge_width[rise_edge_counter] = g_rfid_carrier_cycle_counter;
@@ -326,6 +335,9 @@ void RFID_RECEIVER_DATA_HANDLER(void)
 		case SYNC_HEAD:
 		    gap_upbound = last_detected_gap + RFID_CYCLE_OFFSET;
 		    gap_downbound = last_detected_gap - RFID_CYCLE_OFFSET;
+#ifdef RFID_DBG_SYNC_HEAD
+
+#endif
 
 		    // same as previous gap
 		    if((gap_upbound > g_rfid_carrier_cycle_counter)
@@ -333,7 +345,7 @@ void RFID_RECEIVER_DATA_HANDLER(void)
 		    {
 			rise_edge_counter++;
 			if(MANCHESTER == g_rfid_tag.encode_scheme 
-				&& (rise_edge_counter >=9))
+				&& (rise_edge_counter >=8))
 			{
 			    // sync head by MANCHESTER 
 			    g_reader_state = READ_DATA;

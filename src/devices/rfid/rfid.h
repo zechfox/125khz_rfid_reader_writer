@@ -22,6 +22,7 @@ typedef struct rfid_tag {
 
 typedef enum reader_state {
   IDLE,
+  WAIT_STABLE,
   DETECT_PERIOD,
   SYNC_HEAD,
   READ_DATA,
