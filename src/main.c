@@ -15,28 +15,28 @@
 #include "fsl_gpio.h"
 
 static char hex [] = { '0', '1', '2', '3', '4', '5', '6', '7',
-                        '8', '9' ,'A', 'B', 'C', 'D', 'E', 'F' };
+  '8', '9' ,'A', 'B', 'C', 'D', 'E', 'F' };
 
 unsigned int out_hex_str(unsigned int number, char* hex_str)
 {
-    int len = 0, k = 0;
-    do//for every 4 bits
-    {
-        //get the equivalent hex digit
-        hex_str[len] = hex[number & 0xF];
-        len++;
-        number >>= 4;
-    }while(number != 0);
-    //since we get the digits in the wrong order reverse the digits in the buffer
-    for(;k < len / 2;k++)
-    {//xor swapping
-        hex_str[k] ^= hex_str[len - k - 1];
-        hex_str[len - k - 1] ^= hex_str[k];
-        hex_str[k] ^= hex_str[len - k - 1];
-    }
-    //null terminate the buffer and return the length in digits
-    hex_str[len]='\0';
-    return len;
+  int len = 0, k = 0;
+  do//for every 4 bits
+  {
+    //get the equivalent hex digit
+    hex_str[len] = hex[number & 0xF];
+    len++;
+    number >>= 4;
+  }while(number != 0);
+  //since we get the digits in the wrong order reverse the digits in the buffer
+  for(;k < len / 2;k++)
+  {//xor swapping
+    hex_str[k] ^= hex_str[len - k - 1];
+    hex_str[len - k - 1] ^= hex_str[k];
+    hex_str[k] ^= hex_str[len - k - 1];
+  }
+  //null terminate the buffer and return the length in digits
+  hex_str[len]='\0';
+  return len;
 }
 
 int main(void)
@@ -53,22 +53,22 @@ int main(void)
   PRINTF("Delay 2 secondes. \r\n");
   for(int i = 0;i < 40000000;i++)
   {
-      __NOP();
+    __NOP();
   }
   /*
    * LCD layout
    * ==============
    * TagId: 
    * xxxxxxxxxxxxxx
-   * TagType:EM4100/T5557
-   * Modulation:AM/FSK/PSK
+   * Mod: Man/Bi/PSK
+   * Cyc:64/32/16
    * Mode:Read/Write
    * ==============
    */
   lcd_update_display_buffer(0, 0, "TagId:");
   lcd_update_display_buffer(1, 0, "FFFFFFFF");
-  lcd_update_display_buffer(2, 0, "TagType:UNKN");
-  lcd_update_display_buffer(3, 0, "Mod:UNKN");
+  lcd_update_display_buffer(2, 0, "Mod:UNKN");
+  lcd_update_display_buffer(3, 0, "Cyc:UNKN");
   lcd_update_display_buffer(4, 0, "Mode:Read");
 
   PRINTF("refresh LCD. \r\n");
@@ -84,11 +84,11 @@ int main(void)
 
     if(IDLE == g_reader_state)
     {
-	rfid_enable_carrier();
+      rfid_enable_carrier();
     }
     else if(RESET == g_reader_state)
     {
-	rfid_reset();
+      rfid_reset();
     }
     else if(PARSE_DATA == g_reader_state)
     {
