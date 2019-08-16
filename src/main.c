@@ -78,65 +78,67 @@ int main(void)
   PRINTF("Force pin of TPM1_CH1 output high! \r\n");
 #endif
   rfid_init();
+  rfid_enable_carrier();
 
   while(1)
   {
-
-    if(IDLE == g_reader_state)
-    {
-      rfid_enable_carrier();
-    }
-    else if(RESET == g_reader_state)
-    {
-      rfid_reset();
-    }
-    else if(PARSE_DATA == g_reader_state)
-    {
-      // got enough data, disable carrier
-      // next loop will enable it again
-      rfid_disable_carrier();
-#ifdef RFID_DBG_RECV
-
-      for(unsigned char i = 0;i < RFID_DETECT_RISE_EDGE_NUMBER;i++)
-      {
-        PRINTF("DBG: Rise Edge No.%d width: %d \r\n", i, g_rfid_rise_edge_width[i]);
-      }
-
-      PRINTF("DBG: Detected Tag bit length: %d cycle \r\n", g_rfid_tag.bit_length);
-      PRINTF("DBG: Detected Tag encode scheme %d \r\n", g_rfid_tag.encode_scheme);
-      g_reader_state = RESET;
-#endif
-      result = rfid_parse_data(&g_rfid_tag);
-    }
-
+    result = rfid_receive_data();
 
     if(kStatus_Success == result)
     {
       unsigned int len = out_hex_str(g_rfid_tag.tag_id, tag_id_str);
-      lcd_update_display_buffer(1, 0, "TagId:");
+      // tag id
       if(len > 0)
       {
-        lcd_update_display_buffer(2, 0, tag_id_str);
+        lcd_update_display_buffer(1, 0, tag_id_str);
       }
       else
       {
-        lcd_update_display_buffer(2, 0, "UNKN");
+        lcd_update_display_buffer(1, 0, "UNKN");
       }
-      lcd_update_display_buffer(3, 0, "TagType:EM4100");
-      lcd_update_display_buffer(4, 0, "Modulation:MACHE");
+
+      // code scheme
+      if (MANCHESTER == g_rfid_tag.encode_scheme)
+      {
+        lcd_update_display_buffer(2, 0, "Mod:MAN");
+      }
+      else if (BIPHASE == g_rfid_tag.encode_scheme)
+      {
+        lcd_update_display_buffer(2, 0, "Mod:BI");
+      }
+      else if (PSK == g_rfid_tag.encode_scheme)
+      {
+        lcd_update_display_buffer(2, 0, "Mod:PSK");
+      }
+
+      // cycle
+      if (RFID_CYCLE_16 == g_rfid_tag.bit_length)
+      {
+        lcd_update_display_buffer(3, 0, "Cyc:16");
+      }
+      else if (RFID_CYCLE_32 == g_rfid_tag.bit_length)
+
+      {
+        lcd_update_display_buffer(3, 0, "Cyc:32");
+      }
+      else
+      {
+        lcd_update_display_buffer(3, 0, "Cyc:64");
+      }
+
+      // work mode
       if(READ == g_work_mode)
       {
-        lcd_update_display_buffer(5, 3, "Mode:Read");
+        lcd_update_display_buffer(4, 0, "Mode:Read");
       }
       else
       {
-        lcd_update_display_buffer(5, 3, "Mode:Write");
+        lcd_update_display_buffer(4, 0, "Mode:Write");
       } 
 
       PRINTF("refresh LCD. \r\n");
       lcd_refresh_screen();
     }
-
   }
   return 0;
 }

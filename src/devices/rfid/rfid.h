@@ -39,7 +39,7 @@ extern workMode g_work_mode;
 extern readerState g_reader_state;
 extern unsigned char g_rfid_bits_buffer[RFID_EM4100_DATA_BITS];
 #ifdef RFID_DBG_RECV
-extern unsigned char g_rfid_rise_edge_width[RFID_DETECT_RISE_EDGE_NUMBER];
+extern unsigned char g_rfid_rise_edge_gap[RFID_DETECT_RISE_EDGE_NUMBER];
 #endif
 extern rfidTag g_rfid_tag;
 #ifdef RFID_DBG
@@ -49,5 +49,7 @@ void rfid_enable_carrier();
 void rfid_disable_carrier();
 status_t rfid_parity_check();
 status_t rfid_parse_data(rfidTag *rfid_tag_ptr);
+unsigned char rfid_get_bit_length(unsigned char cycles);
+status_t rfid_receive_data();
 void rfid_reset();
 void rfid_init();
