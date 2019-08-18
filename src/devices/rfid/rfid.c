@@ -222,7 +222,6 @@ status_t rfid_receive_data()
   status_t result = kStatus_Fail;
   static unsigned char s_max_rise_edge_gap = 0;
   static unsigned char s_min_rise_edge_gap = 0xff;
-  static unsigned char s_last_detected_gap = 0;
   static unsigned char s_received_bits = 9;
 
   unsigned char gap_upbound = 0;
@@ -263,15 +262,15 @@ status_t rfid_receive_data()
       // min rise edge gap is the bit length cycle
       g_rfid_tag.bit_length = rfid_get_bit_length(s_min_rise_edge_gap);
 
-      unsigned int 2_bit_length_upbound = 2 * g_rfid_tag.bit_length + RFID_CYCLE_OFFSET;
-      unsigned int 2_bit_length_downbound = 2 * g_rfid_tag.bit_length - RFID_CYCLE_OFFSET;
+      unsigned int two_bit_length_upbound = 2 * g_rfid_tag.bit_length + RFID_CYCLE_OFFSET;
+      unsigned int two_bit_length_downbound = 2 * g_rfid_tag.bit_length - RFID_CYCLE_OFFSET;
       unsigned int half_bit_length = g_rfid_tag.bit_length << 1;
       unsigned int one_half_bit_length_upbound = 3 * half_bit_length + RFID_CYCLE_OFFSET;
       unsigned int one_half_bit_length_downbound = 3 * half_bit_length - RFID_CYCLE_OFFSET;
 
       // max rise edge gap = 2 * bit length, biphase 
-      if((2_bit_length_upbound > s_max_rise_edge_gap)
-         && (2_bit_length_downbound < s_max_rise_edge_gap))
+      if((two_bit_length_upbound > s_max_rise_edge_gap)
+         && (two_bit_length_downbound < s_max_rise_edge_gap))
       {
         g_rfid_tag.encode_scheme = BIPHASE;
       }
@@ -352,7 +351,7 @@ status_t rfid_receive_data()
       // use one bound for easy
       else if(g_rfid_carrier_cycle_counter < (3 * (g_rfid_tag.bit_length >> 1)))
       {
-        g_rfid_bits_buffer[s_received_bits] = g_rfid_bits_buffer[s_eceived_bits - 1];
+        g_rfid_bits_buffer[s_received_bits] = g_rfid_bits_buffer[s_received_bits - 1];
         s_received_bits++;
 
         g_rfid_bits_buffer[s_received_bits] = 0x1 & (g_rfid_bits_buffer[s_received_bits - 1] + 1);
@@ -474,7 +473,7 @@ void RFID_RECEIVER_DATA_HANDLER(void)
     if(g_rfid_is_edge_detected)
     {
       // didn't handle last edge in time.
-      PRINTF("ERROR: Didn't handle last edge in time. \r\n", (p+1));
+      PRINTF("ERROR: Didn't handle last edge in time. \r\n");
     }
 
     // handle rise edge interrupt of rfid receiver pin
