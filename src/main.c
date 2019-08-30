@@ -87,6 +87,7 @@ int main(void)
     if(kStatus_Success == result)
     {
       unsigned int len = out_hex_str(g_rfid_tag.tag_id, tag_id_str);
+      lcd_clr_scr();
       // tag id
       if(len > 0)
       {

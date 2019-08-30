@@ -13,13 +13,13 @@ readerState g_reader_state = IDLE;
 unsigned char g_rfid_bits_buffer[RFID_EM4100_DATA_BITS];
 unsigned int g_rfid_bits[RFID_EM4100_DATA_BITS/ CHAR_BIT * sizeof (int)];
 rfidTag g_rfid_tag;
-#ifdef RFID_DBG_RECV
-unsigned char g_rfid_rise_edge_gap[RFID_DETECT_RISE_EDGE_NUMBER];
-#endif
-unsigned char g_rfid_carrier_cycle_counter = 0;
-bool g_rfid_is_edge_detected = false;
-unsigned char g_rise_edge_counter = 0;
-unsigned char g_rfid_bit_period = 0;
+unsigned char g_rfid_mod_waveform[RFID_WAVEFORM_ARRAY_SIZE];
+volatile unsigned int g_rfid_carrier_cycle_counter = 0;
+unsigned char g_rfid_waveform_counter = 0;
+unsigned int g_rfid_check_point = 0;
+volatile bool g_rfid_is_edge_detected = false;
+volatile bool g_rfid_is_check_point = false;
+volatile unsigned char g_rise_edge_counter = 0;
 #ifdef RFID_DBG 
 unsigned int g_rfid_dbg_counter = 0;
 #endif
@@ -39,12 +39,11 @@ void rfid_init()
   }
   g_rfid_bits[0] = 0x1FF;
   g_rfid_bits[1] = 0;
-#ifdef RFID_DBG_RECV
-  for(unsigned char i = 0;i < RFID_DETECT_RISE_EDGE_NUMBER;i++)
+
+  for(unsigned char i = 0;i < RFID_WAVEFORM_ARRAY_SIZE;i++)
   {
-    g_rfid_rise_edge_gap[i] = 0x0;
+    g_rfid_mod_waveform[i] = 0x0;
   }
-#endif
 
   g_rfid_tag.version_number = 0xFF;
   g_rfid_tag.tag_id = 0xFFFFFFFF;
@@ -63,9 +62,12 @@ void rfid_reset()
   g_work_mode = READ;
   g_reader_state = IDLE;
   g_rfid_carrier_cycle_counter = 0;
-  g_rfid_bit_period = 0;
+  g_rfid_check_point = 0;
+  g_rfid_is_check_point = false;
+  g_rfid_is_edge_detected = false;
+  g_rfid_waveform_counter = 0;
 #ifdef RFID_DBG 
-  unsigned int g_rfid_dbg_counter = 0;
+  g_rfid_dbg_counter = 0;
 #endif
 
   rfid_init();
@@ -109,7 +111,7 @@ void rfid_disable_carrier()
   return;
 }
 
-status_t rfid_parity_check()
+status_t rfid_parity_check(unsigned char * check_data)
 {
   status_t result = kStatus_Fail;
   unsigned char column_parity[4] = {0, 0, 0, 0};
@@ -134,6 +136,10 @@ status_t rfid_parity_check()
 
 #ifdef RFID_DBG_PARITiY
   unsigned char bit_counts = 0;
+  for(unsigned char i = 0; i < RFID_EM4100_DATA_BITS;i++)
+  {
+    PRINTF("DBG: >>> PARITY >>> Bit %d: %d.\r\n", i, g_rfid_bits_buffer[i]);
+  }
 #endif
 
   for(unsigned char i = 0; i < RFID_BIT_GROUPS;i++)
@@ -146,12 +152,12 @@ status_t rfid_parity_check()
       raw_parity += check_bit; 
       column_parity[h] += check_bit;
 #ifdef RFID_DBG_PARITiY
-      PRINTF("INFO: Bit %d. raw %d parity is %d, column %d parity is %d. \r\n", bit_counts++, i, raw_parity & 1, h, column_parity[h] & 1);
+      PRINTF("DBG: >>> PARITY >>> Bit %d: %d. Raw %d, parity is %d, column %d parity is %d. \r\n", bit_counts++, check_bit, i, raw_parity & 1, h, column_parity[h] & 1);
 #endif
     }
     // the last bit of each group indicate 1 numbers
 #ifdef RFID_DBG_PARITiY
-    PRINTF("INFO: Bit %d. Check Raw %d parity.\r\n", bit_counts++, i);
+    PRINTF("DBG: >>> PARITY >>> Bit %d. Check Raw %d parity.\r\n", bit_counts++, i);
 #endif
     if((raw_parity & 1) != *check_bits_ptr++)
     {
@@ -164,12 +170,12 @@ status_t rfid_parity_check()
   for(unsigned char p = 0;p < 4;p++)
   {
 #ifdef RFID_DBG_PARITiY
-    PRINTF("INFO: Bit %d. Check Column %d parity.\r\n", bit_counts++, p);
+    PRINTF("DBG: >>> PARITY >>> Bit %d. Check Column %d parity.\r\n", bit_counts++, p);
 #endif
     if((column_parity[p] & 1) != *check_bits_ptr++)
     {
 #ifdef RFID_DBG_PARITiY
-      PRINTF("ERROR: Parity error in column %d parity. \r\n", p);
+      PRINTF("DBG: >>> PARITY >>> Parity error in column %d parity. \r\n", p);
 #endif
       result = kStatus_Fail;
       break;
@@ -178,12 +184,12 @@ status_t rfid_parity_check()
 
   // the last bit should always be 0
 #ifdef RFID_DBG_PARITiY
-  PRINTF("INFO: Bit %d. The last bit is stop bit, should be 0.\r\n", bit_counts++);
+  PRINTF("DBG: >>> PARITY >>> Bit %d. The last bit is stop bit, should be 0.\r\n", bit_counts++);
 #endif
   if(*check_bits_ptr)
   {
 #ifdef RFID_DBG_PARITY
-    PRINTF("ERROR: The last bit is not 0. \r\n", (p+1));
+    PRINTF("DBG: >>> PARITY >>> The last bit is not 0. \r\n", (p+1));
 #endif
     result = kStatus_Fail;
   }
@@ -210,8 +216,10 @@ unsigned char rfid_get_bit_length(unsigned char cycles)
   {
     bit_length = 16;
   }
-
-  PRINTF("ERROR: CAN'T determine bit length. cycles is %d.\r\n", cycles);
+  else
+  {
+    PRINTF("ERROR: CAN'T determine bit length. cycles is %d.\r\n", cycles);
+  }
 
   return bit_length;
   
@@ -220,193 +228,132 @@ unsigned char rfid_get_bit_length(unsigned char cycles)
 status_t rfid_receive_data()
 {
   status_t result = kStatus_Fail;
-  static unsigned char s_max_rise_edge_gap = 0;
   static unsigned char s_min_rise_edge_gap = 0xff;
-  static unsigned char s_received_bits = 9;
-
-  unsigned char gap_upbound = 0;
-  unsigned char gap_downbound = 0; 
-  unsigned char header_cycles = 0;
-
-  // no edge detected, wait
-  if (!g_rfid_is_edge_detected)
-  {
-    return result;
-  }
-
-#ifdef RFID_DBG_RECV
-  g_rfid_rise_edge_gap[g_rise_edge_counter] = g_rfid_carrier_cycle_counter;
-#endif
 
   if (WAIT_STABLE == g_reader_state)
   {
-    if(g_rise_edge_counter > 100)
+    if(g_rise_edge_counter > 200)
     {
+      // definitly a card, try to detect its period.
       g_reader_state = DETECT_PERIOD;
       g_rise_edge_counter = 0;
+      g_rfid_is_edge_detected = 0;
     }
   }
   else if (DETECT_PERIOD == g_reader_state)
   {
-    if(s_min_rise_edge_gap > g_rfid_carrier_cycle_counter)
+    if(g_rfid_is_edge_detected)
     {
-      s_min_rise_edge_gap = g_rfid_carrier_cycle_counter;
-    }
-    if(s_max_rise_edge_gap < g_rfid_carrier_cycle_counter)
-    {
-      s_max_rise_edge_gap = g_rfid_carrier_cycle_counter;
-    }
-
-    if(g_rise_edge_counter > RFID_DETECT_RISE_EDGE_NUMBER)
-    {
-      // min rise edge gap is the bit length cycle
-      g_rfid_tag.bit_length = rfid_get_bit_length(s_min_rise_edge_gap);
-
-      unsigned int two_bit_length_upbound = 2 * g_rfid_tag.bit_length + RFID_CYCLE_OFFSET;
-      unsigned int two_bit_length_downbound = 2 * g_rfid_tag.bit_length - RFID_CYCLE_OFFSET;
-      unsigned int half_bit_length = g_rfid_tag.bit_length << 1;
-      unsigned int one_half_bit_length_upbound = 3 * half_bit_length + RFID_CYCLE_OFFSET;
-      unsigned int one_half_bit_length_downbound = 3 * half_bit_length - RFID_CYCLE_OFFSET;
-
-      // max rise edge gap = 2 * bit length, biphase 
-      if((two_bit_length_upbound > s_max_rise_edge_gap)
-         && (two_bit_length_downbound < s_max_rise_edge_gap))
+      unsigned char rise_edge_gap = 0xFF & g_rfid_carrier_cycle_counter;
+      // ignore the counter if it's too small
+      // TODO: remove the small check, it impedes PSK.
+      if(s_min_rise_edge_gap > rise_edge_gap
+        && rise_edge_gap > 2)
       {
-        g_rfid_tag.encode_scheme = BIPHASE;
-      }
-      // max rise edge gap = 1.5 * bit length, menchester or psk
-      else if((one_half_bit_length_upbound > s_max_rise_edge_gap)
-         && (one_half_bit_length_downbound < s_max_rise_edge_gap))
-      {
-        g_rfid_tag.encode_scheme = MANCHESTER;
+        s_min_rise_edge_gap = rise_edge_gap;
       }
 
-      // TODO: double check PSK profile
-      if (g_rfid_tag.bit_length < 5)
+      if(g_rise_edge_counter > RFID_DETECT_RISE_EDGE_NUMBER)
       {
-        g_rfid_tag.encode_scheme = PSK;
-      }
+        // min rise edge gap is the bit length cycle
+        g_rfid_tag.bit_length = rfid_get_bit_length(s_min_rise_edge_gap);
+        // we already know the bit length, sync head by it.
+        g_reader_state = COLLECT_DATA;
 
-      // we already know the bit length, sync head by it.
-      g_reader_state = SYNC_HEAD;
-#ifdef RFID_DBG_RECV
-      // terminate reader for debug reason 
-      g_reader_state = PARSE_DATA;
-#endif
-      s_max_rise_edge_gap = 0;
-      s_min_rise_edge_gap = 0xff;
-      g_rise_edge_counter = 0;
+        // TODO: double check PSK profile
+        if (g_rfid_tag.bit_length < 5)
+        {
+          g_rfid_tag.encode_scheme = PSK;
+          g_reader_state = DETECT_PERIOD;
+        }
+
+      }
+      g_rfid_is_edge_detected = false;
+      g_rfid_carrier_cycle_counter = 0;
     }
   }
-  else if (SYNC_HEAD)
+  else if (COLLECT_DATA == g_reader_state)
   {
-#ifdef RFID_DBG_SYNC_HEAD
+    // collect data
+    // 1 -> high level
+    // 0 -> low level
+    // each bit is half bit length period.
 
-#endif
-    if ( MANCHESTER == g_rfid_tag.encode_scheme )
+    if(g_rfid_is_edge_detected)
     {
-      gap_upbound = g_rfid_tag.bit_length + RFID_CYCLE_OFFSET;
-      gap_downbound = g_rfid_tag.bit_length - RFID_CYCLE_OFFSET;
-      header_cycles = 8;
+      // rise edge
+      // g_rfid_carrier_cycle_counter only reset after rise edge
+      // because it's easy to know 1/4 bit length check point.
+      // It's not record logic level when met rise edge, because
+      // it could be a noise, check the logic 1/4 bit length later.
+      g_rfid_carrier_cycle_counter = 0;
+      g_rfid_check_point = g_rfid_tag.bit_length / 4;
+      g_rfid_is_edge_detected = false;
     }
-    else if ( BIPHASE == g_rfid_tag.encode_scheme )
+    else if(g_rfid_is_check_point)
     {
-      gap_upbound = 2 * g_rfid_tag.bit_length + RFID_CYCLE_OFFSET;
-      gap_downbound = 2 * g_rfid_tag.bit_length - RFID_CYCLE_OFFSET;
-      header_cycles = 5;
-    }
-    else
-    {
-      // TODO: support PSK
-
-    }
-
-    if ( ( gap_upbound > g_rfid_carrier_cycle_counter )
-       && ( g_rfid_carrier_cycle_counter > gap_downbound ) )
-    {
-      if ( g_rise_edge_counter >= header_cycles )
+      // check point of logic level
+      unsigned int logic_level  = GPIO_ReadPinInput(RFID_RECEIVER_DATA_GPIO_PORT, RFID_RECEIVER_DATA_GPIO_INDEX);
+      unsigned char array_index = g_rfid_waveform_counter / 8;
+      unsigned char bit_index   = g_rfid_waveform_counter % 8;
+      if(g_rfid_carrier_cycle_counter < g_rfid_tag.bit_length / 2)
       {
-        g_reader_state = READ_DATA;
+        // it must be high level, because it's first check point after a rise
+        // edge. 
+        // If it's low level, just skip it.
+        if(logic_level)
+        {
+          g_rfid_mod_waveform[array_index] |= (1 << bit_index);
+          g_rfid_waveform_counter++;
+        }
       }
-    }
-    else
-    {
-      g_rise_edge_counter = 0;
-    }
-  }
-  else if ( READ_DATA == g_reader_state )
-  {
-    if(MANCHESTER == g_rfid_tag.encode_scheme)
-    {
-      gap_upbound = g_rfid_tag.bit_length + RFID_CYCLE_OFFSET;
-      gap_downbound = g_rfid_tag.bit_length - RFID_CYCLE_OFFSET;
-      // 1 bit cycle, receive bit same as previous
-      // use one bound for easy
-      if(g_rfid_carrier_cycle_counter < gap_upbound )
+      else
       {
-        g_rfid_bits_buffer[s_received_bits] = g_rfid_bits_buffer[s_received_bits - 1];
-        s_received_bits++;
+        // not the first check point
+        g_rfid_mod_waveform[array_index] |= (logic_level << bit_index);
+        g_rfid_waveform_counter++;
       }
-      // 1.5 bit cycle, receive 2bit, one same as previous, the other is reversed
-      // use one bound for easy
-      else if(g_rfid_carrier_cycle_counter < (3 * (g_rfid_tag.bit_length >> 1)))
+      // push check point to 1/2 bit length further.
+      g_rfid_check_point = g_rfid_carrier_cycle_counter + g_rfid_tag.bit_length / 2;
+      if(g_rfid_waveform_counter == (RFID_WAVEFORM_RECORDS_NUMBER - 1))
       {
-        g_rfid_bits_buffer[s_received_bits] = g_rfid_bits_buffer[s_received_bits - 1];
-        s_received_bits++;
-
-        g_rfid_bits_buffer[s_received_bits] = 0x1 & (g_rfid_bits_buffer[s_received_bits - 1] + 1);
-        s_received_bits++;
+        // has recorded 256 waveform records,
+        // goto parse state
+        g_reader_state = PARSE_DATA;
+        g_rfid_check_point = 0;
       }
-
+      g_rfid_is_check_point = false;
     }
-    else if(BIPHASE == g_rfid_tag.encode_scheme)
-    {
-
-    }
-    else
-    {
-      // only manchester and biphase supported, treat psk as unknown
-      g_reader_state = RESET;
-    }
-
-    if(s_received_bits >= RFID_EM4100_DATA_BITS)
-    {
-      g_reader_state = PARSE_DATA;
-      s_received_bits = 9;
-    }
-
-
   }
   else if (PARSE_DATA == g_reader_state)
   {
     // got enough data, disable carrier before parse it.
-    rfid_disable_carrier();
-
-    result = rfid_parse_data(&g_rfid_tag);
-#ifdef RFID_DBG_RECV
-
-    for(unsigned char i = 0;i < RFID_DETECT_RISE_EDGE_NUMBER;i++)
+    PRINTF("INFO: RFID Waveform records: . \r\n");
+    for(unsigned char i = 0; i < RFID_WAVEFORM_ARRAY_SIZE; i++)
     {
-      PRINTF("DBG: Rise Edge No.%d width: %d \r\n", i, g_rfid_rise_edge_gap[i]);
+      PRINTF("0x%02x \r\n", g_rfid_mod_waveform[i]);
     }
 
-    PRINTF("DBG: Detected Tag bit length: %d cycle \r\n", g_rfid_tag.bit_length);
-    PRINTF("DBG: Detected Tag encode scheme %d \r\n", g_rfid_tag.encode_scheme);
-    g_reader_state = RESET;
-    result = kStatus_Success;
+#ifdef RFID_DBG_PARSE_DATA
+    for(unsigned char i = 0; i < RFID_WAVEFORM_RECORDS_NUMBER; i++)
+    {
+
+    }
 #endif
-    // enable carrier again, parse result is no matter.
-    rfid_enable_carrier();
+    result = rfid_parse_data(&g_rfid_tag);
+    if(kStatus_Fail == result)
+    {
+      // restart 
+      PRINTF(">>> PARSE DATA >>> Failed, reset.\r\n");
+      rfid_reset();
+    }
   }
   else if ( RESET == g_reader_state )
   {
+    rfid_disable_carrier();
     rfid_reset();
+    rfid_enable_carrier();
   }
-  // clear context
-  // 1. finish edge handling. 
-  g_rfid_is_edge_detected = false;
-  // 2. count from current rise edge to next one.
-  g_rfid_carrier_cycle_counter = 0;
 
   return result;
 }
@@ -417,9 +364,8 @@ status_t rfid_parse_data(rfidTag *rfid_tag_ptr)
   status_t result = kStatus_Fail;
   unsigned char *tag_bits_ptr = &g_rfid_bits_buffer[RFID_HEADER_BITS];
 
-  result = rfid_parity_check();    
-
-  if(kStatus_Success == result)
+  if(kStatus_Success == rfid_parse_data_manchester()
+     || kStatus_Success == rfid_parse_data_biphase())
   {
     // first 8bits is version number/customer ID
     rfid_tag_ptr->version_number = 0;
@@ -435,8 +381,206 @@ status_t rfid_parse_data(rfidTag *rfid_tag_ptr)
       rfid_tag_ptr->tag_id |= (*tag_bits_ptr << i); 
       tag_bits_ptr++;
     }
+    result = kStatus_Success;
   }
   return result;
+}
+
+void rfid_extract_bits(unsigned char * source, unsigned char * destination, unsigned char start_bit_index, unsigned char number)
+{
+
+}
+
+status_t rfid_parse_data_manchester(void)
+{
+  status_t result = kStatus_Fail;
+  bool without_shift_phase = false;
+  bool with_shift_phase = true;
+  unsigned char bits_buffer[RFID_EM4100_DATA_BUFFER_SIZE];
+
+  if(kStatus_Success == rfid_demodulation(MANCHESTER, g_rfid_mod_waveform, without_shift_phase, bits_buffer) 
+     || kStatus_Success == rfid_demodulation(MANCHESTER, g_rfid_mod_waveform, with_shift_phase, bits_buffer))
+  {
+    
+    // parity the demoduled data
+    if(rfid_parity_check(bits_buffer))
+    {
+      result = kStatus_Success;
+    }
+
+  }
+  return result;
+
+}
+
+status_t rfid_parse_data_biphase(void)
+{
+  status_t result = kStatus_Fail;
+  bool without_shift_phase = false;
+  bool with_shift_phase = true;
+  unsigned char bits_buffer[RFID_EM4100_DATA_BUFFER_SIZE];
+
+  if(kStatus_Success == rfid_demodulation(BIPHASE, g_rfid_mod_waveform, without_shift_phase, bits_buffer) 
+     || kStatus_Success == rfid_demodulation(BIPHASE, g_rfid_mod_waveform, with_shift_phase, bits_buffer))
+  {
+    // parity the demoduled data
+    if(rfid_parity_check(bits_buffer))
+    {
+      result = kStatus_Success;
+    }
+  }
+
+  return result;
+
+}
+
+status_t rfid_demodulation(encodeScheme code_scheme, unsigned char * mod_data, bool shift_phase, unsigned char * demod_data)
+{
+  status_t result = kStatus_Fail;
+  unsigned char header_position = 0;
+  bool is_ticked = false;
+  bool found_header = false;
+  unsigned char tick = 0;
+  unsigned char tock = 0;
+  unsigned char continue_one_counter = 0;
+  // raw data is demodulated from mod_data
+  unsigned char raw_data[RFID_EM4100_DATA_BITS * 2 / 8];
+  unsigned char (*decoder_ptr)(unsigned char) = &rfid_decode_manchester;
+
+  if(BIPHASE == code_scheme)
+  {
+    decoder_ptr = &rfid_decode_biphase;
+  }
+
+  // clear buffer, before use it.
+  for(unsigned char i = 0;i < RFID_EM4100_DATA_BUFFER_SIZE; i++)
+  {
+    demod_data[i] = 0;
+  }
+
+  if (shift_phase)
+  {
+    is_ticked = true;
+    tick = 0;
+  }
+
+  for(unsigned char records_index = 0; records_index < RFID_WAVEFORM_RECORDS_NUMBER; records_index++)
+  {
+    unsigned char array_index = records_index / 8;
+    unsigned char bit_index = records_index % 8;
+    unsigned char level = (mod_data[array_index] >> bit_index) & 1;
+    unsigned char modulated_code = 0;
+    unsigned char decoded_bit = 0;
+    if(is_ticked)
+    {
+      tock = level;
+      modulated_code = (tick << 1) | tock;
+      decoded_bit = (*decoder_ptr)(modulated_code);
+      if(0xFF != decoded_bit)
+      {
+        // 2bits modulated data generates 1bit demoduled data.
+        array_index = records_index / 16;
+        bit_index = (records_index / 2) % 8;
+        raw_data[array_index] |= decoded_bit << bit_index; 
+        // check header: 9bits 1.
+        if(decoded_bit)
+        {
+          continue_one_counter++;
+        }
+        else
+        {
+          continue_one_counter = 0;
+        }
+
+        if(9 == continue_one_counter)
+        {
+          found_header = true;
+          header_position = records_index / 2;
+        }
+      }
+      else
+      {
+        // TODO: print error here.
+        break;
+      }
+    }
+    else
+    {
+      tick = level; 
+      is_ticked = true;
+    }
+  }
+
+  if(!found_header)
+  {
+    // continue search (RFID_HEADER_BITS - continue_one_counter) bits further,
+    // in case header was wrapped.
+    for(unsigned char index = 0; index < RFID_HEADER_BITS - continue_one_counter; index++)
+    {
+      unsigned char array_index = index / 8;
+      unsigned char bit_index = index % 8;
+      unsigned char decoded_bit = (raw_data[array_index] >> bit_index) & 1;
+
+      if(decoded_bit)
+      {
+
+      }
+      else
+      {
+        break;
+      }
+      if(9 == continue_one_counter)
+      {
+        found_header = true;
+        header_position = RFID_EM4100_DATA_BITS * 2 / 8 - index; 
+      }
+    }
+
+  }
+
+  if(found_header)
+  {
+    rfid_extract_bits(raw_data, demod_data, header_position + RFID_HEADER_BITS, RFID_EM4100_DATA_BITS - RFID_HEADER_BITS);
+  }
+
+  return result;
+}
+
+inline unsigned char rfid_decode_manchester(unsigned char manchester_code)
+{
+  if(0x2 == manchester_code)
+  {
+    return 0;
+  }
+  else if(0x1 == manchester_code)
+  {
+    return 1;
+  }
+  else
+  {
+    return 0xFF;
+  }
+
+}
+
+inline unsigned char rfid_decode_biphase(unsigned char biphase_code)
+{
+  if(0x3 == biphase_code)
+  {
+    return 1;
+  }
+  else if(0x1 == biphase_code)
+  {
+    return 0;
+  }
+  else if(0x2 == biphase_code)
+  {
+    return 0;
+  }
+  else
+  {
+    return 0xFF;
+  }
 }
 
 void RFID_TRANSMITTER_HANDLER(void)
@@ -448,12 +592,19 @@ void RFID_TRANSMITTER_HANDLER(void)
     g_rfid_carrier_cycle_counter++;
   }
 
+  if(g_rfid_check_point
+     && g_rfid_carrier_cycle_counter == g_rfid_check_point)
+  {
+    g_rfid_is_check_point = true;
+  }
+
   if(g_rfid_carrier_cycle_counter > RFID_TAG_LEAVE_COUNTER)
   {
     // reset rfid
     g_reader_state = RESET;
+    g_rfid_carrier_cycle_counter = 0;
+    PRINTF("INFO: RESET reader state. \r\n");
   }
-
 
   return TPM_ClearStatusFlags(RFID_TRANSMIT_TPM, RFID_TRNSIMIT_INTERRUPT_FLAG);
 }
@@ -470,10 +621,10 @@ void RFID_RECEIVER_DATA_HANDLER(void)
       g_reader_state = WAIT_STABLE;
     }
     
-    if(g_rfid_is_edge_detected)
+    if(g_rfid_is_edge_detected && (g_reader_state > WAIT_STABLE))
     {
       // didn't handle last edge in time.
-      PRINTF("ERROR: Didn't handle last edge in time. \r\n");
+//      PRINTF("ERROR: Didn't handle last edge in time. cycle_counter:%d. reader state:%d.\r\n", g_rfid_carrier_cycle_counter, g_reader_state);
     }
 
     // handle rise edge interrupt of rfid receiver pin

@@ -120,6 +120,10 @@ dbg_parity: CFLAGS+=-DRFID_DBG_PARITiY
 
 dbg_parity: all
 
+dbg_synchead: CFLAGS+=-DRFID_DBG_SYNC_HEAD
+
+dbg_synchead: all
+
 dbg_pwm_output: CFLAGS+=-DDBG_PWM_OUTPUT
 
 dbg_pwm_output: all
