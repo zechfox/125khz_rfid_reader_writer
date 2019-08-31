@@ -264,7 +264,7 @@ status_t rfid_receive_data()
       // definitly a card, try to detect its period.
       g_reader_state = DETECT_PERIOD;
       g_rise_edge_counter = 0;
-      g_rfid_is_edge_detected = 0;
+      g_rfid_is_edge_detected = false;
     }
   }
   else if (DETECT_PERIOD == g_reader_state)
@@ -565,7 +565,8 @@ status_t rfid_demodulation(encodeScheme code_scheme, unsigned char * mod_data, b
     }
   }
 
-  if(!found_header)
+  if(!found_header 
+     && continue_one_counter > 0)
   {
     // continue search (RFID_HEADER_BITS - continue_one_counter) bits further,
     // in case header was wrapped.
@@ -575,9 +576,9 @@ status_t rfid_demodulation(encodeScheme code_scheme, unsigned char * mod_data, b
       unsigned char bit_index = index % 8;
       unsigned char decoded_bit = (raw_data[array_index] >> bit_index) & 1;
 
-      if(decoded_bit)
+      if(1 == decoded_bit)
       {
-
+        continue_one_counter++;
       }
       else
       {
