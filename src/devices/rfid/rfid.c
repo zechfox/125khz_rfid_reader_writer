@@ -111,11 +111,36 @@ void rfid_disable_carrier()
   return;
 }
 
+void rfid_format_for_parity_check(unsigned char * unformat_data, unsigned char * formatted_data)
+{
+  //    unformmatted                                  formatted
+  //
+  // D06 D05 D04 P0  D03 D02 D01 D00               P0 D03 D02 D01 D00
+  // D12 P2  D11 D10 D09 D08 P1  D07               P1 D07 D06 D05 D04
+  // D19 D18 D17 D16 P3  D15 D14 D13    ====\      P2 D11 D10 D09 D08
+  // D25 D24 P5  D23 D22 D21 D20 P4     ====/      P3 D15 D14 D13 D12
+  // P7  D31 D30 D29 D28 P6  D27 D26               P4 D19 D18 D17 D16
+  // D38 D37 D36 P8  D35 D34 D33 D32               P5 D23 D22 D21 D20
+  // xxx S0  PC3 PC2 PC1 PC0 P9  D39               P6 D27 D26 D25 D24
+  //                                               P8 D35 D34 D33 D32
+  //                                               P9 D39 D38 D37 D36
+  //                                               S0 PC3 PC2 PC1 PC0
+
+  for(unsigned char i = 0; i < RFID_BIT_GROUPS; i++)
+  {
+    formatted_data[i] = 0;
+  }
+
+
+}
+
 status_t rfid_parity_check(unsigned char * check_data)
 {
   status_t result = kStatus_Fail;
   unsigned char column_parity[4] = {0, 0, 0, 0};
   unsigned char *check_bits_ptr = &g_rfid_bits_buffer[RFID_HEADER_BITS];
+  unsigned char * bit_ptr = check_data;
+  unsigned char formatted_data[RFID_BIT_GROUPS];
 
   // Bit31 .... Bit0
   // D18 D17 D16 P3 D15 D14 D13 D12 P2 D11 D10 D09 D08 P1 D07 D06 D05 P0 D04 D03 D02 D01 D00 1 1 1 1 1 1 1 1 1 
@@ -133,6 +158,8 @@ status_t rfid_parity_check(unsigned char * check_data)
   // D32 D33 D34 D35 P8
   // D36 D37 D38 D39 P9
   // PC0 PC1 PC2 PC3 S0 ---> stop bit 0
+
+  rfid_format_for_parity_check(bit_ptr, formatted_data);
 
 #ifdef RFID_DBG_PARITiY
   unsigned char bit_counts = 0;
@@ -388,6 +415,33 @@ status_t rfid_parse_data(rfidTag *rfid_tag_ptr)
 
 void rfid_extract_bits(unsigned char * source, unsigned char * destination, unsigned char start_bit_index, unsigned char number)
 {
+  unsigned char slot1 = 0, slot2 = 0;
+  unsigned char slot1_array_index = 0;
+  unsigned char slot2_array_index = 0;
+  unsigned char slot_boundary = start_bit_index % 8;
+  unsigned char slot1_mask = (1 << slot_boundary) - 1;
+  unsigned char slot2_mask = slot1_mask ^ 0xFF;
+  unsigned char slot1_bits_num = slot_boundary;
+  unsigned char slot2_bits_num = 8 - slot_boundary;
+  unsigned char extracted_bits_num = 0;
+
+  // example:
+  // source array1 |yyyyy xxx|, slot2 is yyyyy
+  // source array2 |wwwww zzz|, slot1 is zzz
+  // destination array |zzz yyyyy|
+  do
+  {
+    slot2_array_index = (start_bit_index + extracted_bits_num) / 8;
+    slot2 = source[slot2_array_index] & slot2_mask >> slot1_bits_num;
+    // this maybe cause overflow of unsigned char, but it's designd to be
+    // We want to collect the bits from array beginining.
+    slot1_array_index = (start_bit_index + extracted_bits_num + 8) / 8;
+    slot1 = source[slot1_array_index] & slot1_mask << slot2_bits_num;
+
+    destination[extracted_bits_num / 8] = slot1 | slot2;
+    extracted_bits_num += 8;
+
+  }while(extracted_bits_num < number);
 
 }
 
@@ -535,7 +589,6 @@ status_t rfid_demodulation(encodeScheme code_scheme, unsigned char * mod_data, b
         header_position = RFID_EM4100_DATA_BITS * 2 / 8 - index; 
       }
     }
-
   }
 
   if(found_header)

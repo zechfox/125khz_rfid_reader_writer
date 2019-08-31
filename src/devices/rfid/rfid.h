@@ -53,6 +53,7 @@ status_t rfid_demodulation(encodeScheme code_scheme, unsigned char * mod_data, b
 unsigned char rfid_decode_manchester(unsigned char manchester_code);
 unsigned char rfid_decode_biphase(unsigned char biphase_code);
 void rfid_extract_bits(unsigned char * source, unsigned char * destination, unsigned char start_bit_index, unsigned char number);
+void rfid_format_for_parity_check(unsigned char * unformat_data, unsigned char * formatted_data);
 unsigned char rfid_get_bit_length(unsigned char cycles);
 status_t rfid_receive_data();
 void rfid_reset();
