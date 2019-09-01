@@ -125,6 +125,7 @@ void rfid_format_for_parity_check(unsigned char * unformat_data, unsigned char *
   //                                               P8 D35 D34 D33 D32
   //                                               P9 D39 D38 D37 D36
   //                                               S0 PC3 PC2 PC1 PC0
+  unsigned char tmp_bit = 0;
 
   for(unsigned char i = 0; i < RFID_BIT_GROUPS; i++)
   {
