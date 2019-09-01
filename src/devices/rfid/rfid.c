@@ -131,6 +131,17 @@ void rfid_format_for_parity_check(unsigned char * unformat_data, unsigned char *
     formatted_data[i] = 0;
   }
 
+  for(unsigned char i = 0;i < RFID_EM4100_DATA_BITS - RFID_HEADER_BITS; i++)
+  {
+    unsigned char src_array_index = i / 8;
+    unsigned char src_bit_index = i % 8;
+    unsigned char dest_array_index = i / 5;
+    unsigned char dest_bit_index = i % 5;
+
+    tmp_bit = (unformat_data[src_array_index] >> src_bit_index) & 1;
+    formatted_data[dest_array_index] |= tmp_bit << dest_bit_index;
+  }
+
 
 }
 
