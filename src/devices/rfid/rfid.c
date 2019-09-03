@@ -370,7 +370,7 @@ status_t rfid_parse_data(rfidTag *rfid_tag_ptr)
     rfid_tag_ptr->tag_data = 0;
     for(unsigned char i = 1;i < RFID_EM4100_PAYLOAD_BUFFER_SIZE;i++)
     {
-      rfid_tag_ptr->tag_data |= (tag_payload[i] << (8 * (i - 1))); 
+      rfid_tag_ptr->tag_data |= (tag_payload[i] << (8 * (4 - i))); 
     }
     result = kStatus_Success;
 #ifdef RFID_DBG_PARSE_DATA
@@ -738,12 +738,12 @@ void rfid_get_tag_payload(unsigned char * formatted_data_ptr, unsigned char * ta
   {
     if(1 == (i & 1))
     {
-      tmp_data |= (src_ptr[i] & 0xF) << 4;
+      tmp_data |= (src_ptr[i] & 0xF);
       *dest_ptr++ = tmp_data;
     }
     else
     {
-      tmp_data = src_ptr[i] & 0xF;
+      tmp_data = (src_ptr[i] & 0xF) << 4;
     }
   }
 

@@ -17,16 +17,22 @@
 static char hex [] = { '0', '1', '2', '3', '4', '5', '6', '7',
   '8', '9' ,'A', 'B', 'C', 'D', 'E', 'F' };
 
-unsigned int out_hex_str(unsigned int number, char* hex_str)
+unsigned int out_hex_str(unsigned int number, unsigned char output_number, char* hex_str)
 {
   int len = 0, k = 0;
+
+  if(output_number > 8)
+  {
+    return 0;
+  }
+
   do//for every 4 bits
   {
     //get the equivalent hex digit
     hex_str[len] = hex[number & 0xF];
     len++;
     number >>= 4;
-  }while(number != 0);
+  }while(len < output_number);
   //since we get the digits in the wrong order reverse the digits in the buffer
   for(;k < len / 2;k++)
   {//xor swapping
@@ -93,7 +99,7 @@ int main(void)
       unsigned int len = 0;
       lcd_clr_scr();
       lcd_update_display_buffer(0, 0, "Tag:");
-      len =  out_hex_str((unsigned int)rfid_tag.customer_spec_id, tag_data_str);
+      len =  out_hex_str((unsigned int)rfid_tag.customer_spec_id, 2, tag_data_str);
       if(len > 0)
       {
         lcd_update_display_buffer(1, 0, tag_data_str);
@@ -104,7 +110,7 @@ int main(void)
       }
 
       // tag id
-      len = out_hex_str(rfid_tag.tag_data, tag_data_str);
+      len = out_hex_str(rfid_tag.tag_data, 8, tag_data_str);
       if(len > 0)
       {
         lcd_update_display_buffer(2, 0, tag_data_str);
