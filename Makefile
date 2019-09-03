@@ -120,6 +120,10 @@ dbg_parity: CFLAGS+=-DRFID_DBG_PARITiY
 
 dbg_parity: all
 
+dbg_parse: CFLAGS+=-DRFID_DBG_PARSE_DATA
+
+dbg_parse: all
+
 dbg_synchead: CFLAGS+=-DRFID_DBG_SYNC_HEAD
 
 dbg_synchead: all

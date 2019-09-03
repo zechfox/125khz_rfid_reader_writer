@@ -14,8 +14,8 @@ typedef enum encode_scheme {
 } encodeScheme;
 
 typedef struct rfid_tag {
-  unsigned char version_number;
-  unsigned int tag_id;  
+  unsigned char customer_spec_id;
+  unsigned int tag_data;  
   encodeScheme encode_scheme; 
   unsigned char bit_length; // bit length can be 16, 32, 64
 } rfidTag;
@@ -37,24 +37,24 @@ typedef enum Work_mode {
 } workMode;
 
 extern workMode g_work_mode;
-extern readerState g_reader_state;
 extern unsigned char g_rfid_bits_buffer[RFID_EM4100_DATA_BITS];
-extern rfidTag g_rfid_tag;
 #ifdef RFID_DBG
 extern unsigned int g_rfid_dbg_counter;
 #endif
 void rfid_enable_carrier();
 void rfid_disable_carrier();
-status_t rfid_parity_check(unsigned char * check_data);
+bool rfid_parity_check(unsigned char * check_data);
+bool rfid_try_get_tag_payload(unsigned char * check_data, unsigned char * tag_payload_ptr);
 status_t rfid_parse_data(rfidTag *rfid_tag_ptr);
-status_t rfid_parse_data_manchester();
-status_t rfid_parse_data_biphase();
-status_t rfid_demodulation(encodeScheme code_scheme, unsigned char * mod_data, bool shift_phase, unsigned char * demod_data);
+status_t rfid_parse_data_manchester(unsigned char * modulated_data_ptr, unsigned char * tag_payload_ptr);
+status_t rfid_parse_data_biphase(unsigned char * modulated_data_ptr, unsigned char * tag_payload_ptr);
+status_t rfid_demodule_data(encodeScheme code_scheme, unsigned char * mod_data, bool shift_phase, unsigned char * demod_data);
 unsigned char rfid_decode_manchester(unsigned char manchester_code);
 unsigned char rfid_decode_biphase(unsigned char biphase_code);
+void rfid_get_tag_payload(unsigned char * demod_data_ptr, unsigned char * tag_payload_ptr);
 void rfid_extract_bits(unsigned char * source, unsigned char * destination, unsigned char start_bit_index, unsigned char number);
 void rfid_format_for_parity_check(unsigned char * unformat_data, unsigned char * formatted_data);
-unsigned char rfid_get_bit_length(unsigned char cycles);
-status_t rfid_receive_data();
-void rfid_reset();
-void rfid_init();
+bool rfid_get_bit_length(unsigned char cycles, unsigned char * bit_length_ptr);
+status_t rfid_receive_data(rfidTag * rfid_tag_ptr);
+void rfid_reset(rfidTag * rfid_tag_ptr);
+void rfid_init(rfidTag * rfid_tag_ptr);
