@@ -117,17 +117,17 @@ void rfid_format_for_parity_check(unsigned char * unformat_data, unsigned char *
 {
   //    unformmatted                                  formatted
   //
-  // D06 D05 D04 P0  D03 D02 D01 D00               P0 D03 D02 D01 D00
-  // D12 P2  D11 D10 D09 D08 P1  D07               P1 D07 D06 D05 D04
-  // D19 D18 D17 D16 P3  D15 D14 D13    ====\      P2 D11 D10 D09 D08
-  // D25 D24 P5  D23 D22 D21 D20 P4     ====/      P3 D15 D14 D13 D12
-  // P7  D31 D30 D29 D28 P6  D27 D26               P4 D19 D18 D17 D16
-  // D38 D37 D36 P8  D35 D34 D33 D32               P5 D23 D22 D21 D20
-  // xxx S0  PC3 PC2 PC1 PC0 P9  D39               P6 D27 D26 D25 D24
-  //                                               P7 D31 D30 D29 D28
-  //                                               P8 D35 D34 D33 D32
-  //                                               P9 D39 D38 D37 D36
-  //                                               S0 PC3 PC2 PC1 PC0
+  // D06 D05 D04 P0  D03 D02 D01 D00               D00 D01 D02 D03 P0
+  // D12 P2  D11 D10 D09 D08 P1  D07               D04 D05 D06 D07 P1
+  // D19 D18 D17 D16 P3  D15 D14 D13    ====\      D08 D09 D10 D11 P2
+  // D25 D24 P5  D23 D22 D21 D20 P4     ====/      D12 D14 D14 D15 P3
+  // P7  D31 D30 D29 D28 P6  D27 D26               D16 D17 D18 D19 P4
+  // D38 D37 D36 P8  D35 D34 D33 D32               D20 D21 D22 D23 P5
+  // xxx S0  PC3 PC2 PC1 PC0 P9  D39               D24 D25 D26 D27 P6
+  //                                               D28 D29 D30 D31 P7
+  //                                               D32 D33 D34 D35 P8
+  //                                               D36 D37 D38 D39 P9
+  //                                               PC0 PC1 PC2 PC3 S0
   unsigned char tmp_bit = 0;
 #ifdef RFID_DBG_PARSE_DATA
   PRINTF(">>> PARSE DATA >>> Format data for parity check.\r\n");
@@ -150,7 +150,7 @@ void rfid_format_for_parity_check(unsigned char * unformat_data, unsigned char *
     unsigned char dest_bit_index = i % 5;
 
     tmp_bit = (unformat_data[src_array_index] >> src_bit_index) & 1;
-    formatted_data[dest_array_index] |= tmp_bit << dest_bit_index;
+    formatted_data[dest_array_index] |= tmp_bit << (4 - dest_bit_index);
   }
 
 #ifdef RFID_DBG_PARSE_DATA
@@ -698,8 +698,8 @@ bool rfid_parity_check(unsigned char * formatted_data)
   // check row pairty
   for(unsigned char i = 0;i < RFID_BIT_GROUPS - 1; i++)
   {
-    unsigned char data = bit_ptr[i] & 0xF;
-    unsigned char parity = (bit_ptr[i] & 0x10) >> 4;
+    unsigned char data = (bit_ptr[i] & 0x1E) >> 1;
+    unsigned char parity = bit_ptr[i] & 0x1;
 
     if(parity != parity_lookup_table[data])
     {
@@ -710,14 +710,14 @@ bool rfid_parity_check(unsigned char * formatted_data)
     column_parity ^= data;
   }
 
-  if( column_parity != ( bit_ptr[RFID_BIT_GROUPS - 1] & 0xF  ) )
+  if( column_parity != ( (bit_ptr[RFID_BIT_GROUPS - 1] & 0x1E) >> 1  ) )
   {
     PRINTF("ERROR: Column parity check failed.  Calculated Parity is: 0b%04b, Collected Parity is: 0b%04b.\r\n", column_parity, bit_ptr[RFID_BIT_GROUPS - 1] & 0xF);
     result = false;
   }
 
   // stop bits
-  if( 0 != ( bit_ptr[RFID_BIT_GROUPS - 1] & 0x10 ) )
+  if( 0 != ( bit_ptr[RFID_BIT_GROUPS - 1] & 0x1 ) )
   {
     PRINTF("ERROR: Stop Bit is not 0.\r\n");
     result = false;
@@ -736,14 +736,15 @@ void rfid_get_tag_payload(unsigned char * formatted_data_ptr, unsigned char * ta
 #endif
   for(unsigned char i = 0;i < RFID_BIT_GROUPS - 1; i++)
   {
+    unsigned char data = (src_ptr[i] & 0x1E) >> 1;
     if(1 == (i & 1))
     {
-      tmp_data |= (src_ptr[i] & 0xF);
+      tmp_data |= data;
       *dest_ptr++ = tmp_data;
     }
     else
     {
-      tmp_data = (src_ptr[i] & 0xF) << 4;
+      tmp_data = data << 4;
     }
   }
 
