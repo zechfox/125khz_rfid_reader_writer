@@ -7,6 +7,7 @@
 #include <string.h>
 
 #include "fsl_debug_console.h"
+#include <fsl_tpm.h>
 #include "configuration.h"
 #include "lcd_PCD8544.h"
 #include "rfid.h"
@@ -45,12 +46,78 @@ unsigned int out_hex_str(unsigned int number, unsigned char output_number, char*
   return len;
 }
 
+void enable_rfid_receiver(void)
+{
+  if(READ == g_work_mode)
+  {
+    /* Enable RFID receiver interrupt */
+    PORT_SetPinInterruptConfig(RFID_RECEIVER_DATA_PORT, RFID_RECEIVER_DATA_GPIO_INDEX, kPORT_InterruptRisingEdge);
+    // gpio interrupt
+    EnableIRQ(RFID_RECEIVER_DATA_INTERRUPT_NUMBER);
+  }
+
+  return;
+}
+
+void enable_rfid_transmitter(void)
+{
+  if(READ == g_work_mode)
+  {
+    /* Enable TPM Channel1 interrupt */
+    TPM_EnableInterrupts(RFID_TRANSMIT_TPM, RFID_TRANSMITTER_INTERRUPT_ENABLE);
+    /* Enable at the NVIC */
+    // tpm interrupt
+    EnableIRQ(RFID_TRANSMITTER_INTERRUPT_NUMBER);
+  }
+
+  TPM_StartTimer(RFID_TRANSMIT_TPM, kTPM_SystemClock);
+  return;
+}
+
+void disable_rfid_receiver(void)
+{
+  DisableIRQ(RFID_RECEIVER_DATA_INTERRUPT_NUMBER);
+
+  return;
+}
+void disable_rfid_transmitter(void)
+{
+  TPM_StopTimer(RFID_TRANSMIT_TPM);
+  DisableIRQ(RFID_TRANSMITTER_INTERRUPT_NUMBER);
+
+  return;
+}
+
+unsigned int read_receiver_pin(void)
+{
+  return GPIO_ReadPinInput(RFID_RECEIVER_DATA_GPIO_PORT, RFID_RECEIVER_DATA_GPIO_INDEX);
+}
+
+void TPM1_IRQHandler(void)
+{
+  rfid_transmitter_handler();
+  return TPM_ClearStatusFlags(RFID_TRANSMIT_TPM, RFID_TRNSIMIT_INTERRUPT_FLAG);
+}
+
+void PORTA_IRQHandler(void)
+{
+  unsigned int pin_mask = PORT_GetPinsInterruptFlags(RFID_RECEIVER_DATA_PORT);
+
+  if(pin_mask & (1 << RFID_RECEIVER_DATA_GPIO_INDEX))
+  {
+    rfid_receiver_data_handler();
+  }
+  // just clear what interrupts
+  // we do not care other pin interrupt
+  // and we also need clear RFID_RECEIVER_DATA_GPIO_INDEX
+  return PORT_ClearPinsInterruptFlags(RFID_RECEIVER_DATA_PORT, pin_mask);
+}
+
 int main(void)
 {
-
-  status_t result = kStatus_Fail;
   char tag_data_str[10];
   rfidTag rfid_tag;
+  rfidSupportFun support_fun;
 
   //initial MCU
   initial_mcu();
@@ -86,14 +153,20 @@ int main(void)
   GPIO_WritePinOutput(TPM1_CH1_PIN_PORT, TPM1_CH1_PIN_IDX, 1);
   PRINTF("Force pin of TPM1_CH1 output high! \r\n");
 #endif
+
+  support_fun.enable_receiver_fun_ptr = &enable_rfid_receiver;
+  support_fun.enable_transmitter_fun_ptr = &enable_rfid_transmitter;
+  support_fun.disable_receiver_fun_ptr = &disable_rfid_receiver;
+  support_fun.disable_transmitter_fun_ptr = &disable_rfid_transmitter;
+  support_fun.read_receiver_level_fun_ptr = &read_receiver_pin;
+  rfid_configuration(support_fun);
   rfid_init(&rfid_tag);
   rfid_enable_carrier();
 
   while(1)
   {
-    result = rfid_receive_data(&rfid_tag);
 
-    if(kStatus_Success == result)
+    if(rfid_receive_data(&rfid_tag))
     {
       PRINTF(">>> RFID Received Successfully! >>> \r\n");
       unsigned int len = 0;

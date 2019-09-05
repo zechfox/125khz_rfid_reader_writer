@@ -3,15 +3,11 @@
 #include <limits.h>
 
 #include "fsl_debug_console.h"
-#include <fsl_tpm.h>
 
-#include "configuration.h"
 #include "rfid.h"
 
 workMode g_work_mode = READ;
 volatile readerState g_reader_state = IDLE;
-unsigned char g_rfid_bits_buffer[RFID_EM4100_DATA_BITS];
-unsigned int g_rfid_bits[RFID_EM4100_DATA_BITS/ CHAR_BIT * sizeof (int)];
 unsigned char g_rfid_mod_waveform[RFID_WAVEFORM_ARRAY_SIZE];
 volatile unsigned int g_rfid_carrier_cycle_counter = 0;
 unsigned char g_rfid_waveform_counter = 0;
@@ -19,25 +15,15 @@ unsigned int g_rfid_check_point = 0;
 volatile bool g_rfid_is_edge_detected = false;
 volatile bool g_rfid_is_check_point = false;
 volatile unsigned char g_rise_edge_counter = 0;
-#ifdef RFID_DBG 
-unsigned int g_rfid_dbg_counter = 0;
-#endif
+void (*rfid_enable_receiver)(void) = NULL;
+void (*rfid_enable_transmitter)(void) = NULL;
+void (*rfid_disable_receiver)(void) = NULL;
+void (*rfid_disable_transmitter)(void) = NULL;
+unsigned int (*rfid_read_receiver_level)(void) = NULL;
 
 // initial rfid
 void rfid_init(rfidTag * rfid_tag_ptr)
 {
-  // first 9bits always 1
-  for(unsigned char i = 0;i < RFID_HEADER_BITS;i++)
-  {
-      g_rfid_bits_buffer[i] = 0x1;
-  }
-  // clear 10-64bits
-  for(unsigned char i = RFID_HEADER_BITS;i < RFID_EM4100_DATA_BITS;i++)
-  {
-    g_rfid_bits_buffer[i] = 0x0;
-  }
-  g_rfid_bits[0] = 0x1FF;
-  g_rfid_bits[1] = 0;
 
   for(unsigned char i = 0;i < RFID_WAVEFORM_ARRAY_SIZE;i++)
   {
@@ -57,6 +43,17 @@ void rfid_init(rfidTag * rfid_tag_ptr)
   return;
 }
 
+void rfid_configuration(rfidSupportFun functions)
+{
+  rfid_enable_receiver = functions.enable_receiver_fun_ptr;
+  rfid_enable_transmitter = functions.enable_transmitter_fun_ptr;
+  rfid_disable_receiver = functions.disable_receiver_fun_ptr;
+  rfid_disable_transmitter = functions.disable_transmitter_fun_ptr;
+  rfid_read_receiver_level = functions.read_receiver_level_fun_ptr;
+
+  return;
+}
+
 // reset rfid state same as startup
 void rfid_reset(rfidTag * rfid_tag_ptr)
 {
@@ -68,9 +65,6 @@ void rfid_reset(rfidTag * rfid_tag_ptr)
   g_rfid_is_check_point = false;
   g_rfid_is_edge_detected = false;
   g_rfid_waveform_counter = 0;
-#ifdef RFID_DBG 
-  g_rfid_dbg_counter = 0;
-#endif
 
   rfid_init(rfid_tag_ptr);
 
@@ -82,21 +76,9 @@ void rfid_reset(rfidTag * rfid_tag_ptr)
 // set carrier used gpio pin
 void rfid_enable_carrier()
 {
-  // enable receive data only in read mode
-  if(READ == g_work_mode)
-  {
-    /* Enable RFID receiver interrupt */
-    PORT_SetPinInterruptConfig(RFID_RECEIVER_DATA_PORT, RFID_RECEIVER_DATA_GPIO_INDEX, kPORT_InterruptRisingEdge);
-    /* Enable TPM Channel1 interrupt */
-    TPM_EnableInterrupts(RFID_TRANSMIT_TPM, RFID_TRANSMITTER_INTERRUPT_ENABLE);
-    /* Enable at the NVIC */
-    // gpio interrupt
-    EnableIRQ(RFID_RECEIVER_DATA_INTERRUPT_NUMBER);
-    // tpm interrupt
-    EnableIRQ(RFID_TRANSMITTER_INTERRUPT_NUMBER);
-  }
+  (*rfid_enable_receiver)();
+  (*rfid_enable_transmitter)();
 
-  TPM_StartTimer(RFID_TRANSMIT_TPM, kTPM_SystemClock);
   PRINTF("RFID 125kHz Carrier Enabled. \r\n");
   return;
 }
@@ -105,9 +87,8 @@ void rfid_enable_carrier()
 // clear carrier used gpio pin
 void rfid_disable_carrier()
 {
-  TPM_StopTimer(RFID_TRANSMIT_TPM);
-  DisableIRQ(RFID_RECEIVER_DATA_INTERRUPT_NUMBER);
-  DisableIRQ(RFID_TRANSMITTER_INTERRUPT_NUMBER);
+  (*rfid_disable_receiver)();
+  (*rfid_disable_transmitter)();
   g_reader_state = IDLE;
   PRINTF("RFID 125kHz Carrier Disabled. \r\n");
   return;
@@ -153,13 +134,6 @@ void rfid_format_for_parity_check(unsigned char * unformat_data, unsigned char *
     formatted_data[dest_array_index] |= tmp_bit << (4 - dest_bit_index);
   }
 
-#ifdef RFID_DBG_PARSE_DATA
-  PRINTF(">>> PARSE DATA >>> Formatted data:\r\n");
-  for(unsigned char i = 0; i < RFID_BIT_GROUPS; i++)
-  {
-    PRINTF("0x%04x == 0b%08b \r\n", formatted_data[i], formatted_data[i]);
-  }
-#endif
 }
 
 bool rfid_get_bit_length(unsigned char cycles, unsigned char * bit_length_ptr)
@@ -194,9 +168,9 @@ bool rfid_get_bit_length(unsigned char cycles, unsigned char * bit_length_ptr)
   
 }
 
-status_t rfid_receive_data(rfidTag * rfid_tag_ptr)
+bool rfid_receive_data(rfidTag * rfid_tag_ptr)
 {
-  status_t result = kStatus_Fail;
+  bool result = false;
   static unsigned char s_min_rise_edge_gap = 0xff;
   if(NULL == rfid_tag_ptr)
   {
@@ -273,7 +247,7 @@ status_t rfid_receive_data(rfidTag * rfid_tag_ptr)
     else if(g_rfid_is_check_point)
     {
       // check point of logic level
-      unsigned int logic_level  = GPIO_ReadPinInput(RFID_RECEIVER_DATA_GPIO_PORT, RFID_RECEIVER_DATA_GPIO_INDEX);
+      unsigned int logic_level  = (*rfid_read_receiver_level)();
       unsigned char array_index = g_rfid_waveform_counter / 8;
       unsigned char bit_index   = g_rfid_waveform_counter % 8;
       if(g_rfid_carrier_cycle_counter < rfid_tag_ptr->bit_length / 2)
@@ -319,7 +293,7 @@ status_t rfid_receive_data(rfidTag * rfid_tag_ptr)
     }
 #endif
     result = rfid_parse_data(rfid_tag_ptr);
-    if(kStatus_Fail == result)
+    if(!result)
     {
       // restart 
       PRINTF(">>> PARSE DATA >>> Failed, reset.\r\n");
@@ -339,17 +313,17 @@ status_t rfid_receive_data(rfidTag * rfid_tag_ptr)
 }
 
 // parse tag data
-status_t rfid_parse_data(rfidTag *rfid_tag_ptr)
+bool rfid_parse_data(rfidTag *rfid_tag_ptr)
 {
-  status_t result = kStatus_Fail;
+  bool result = false;
   unsigned char tag_payload[RFID_EM4100_PAYLOAD_BUFFER_SIZE];
   unsigned char * modulated_data_ptr = g_rfid_mod_waveform;
 
-  if(kStatus_Success == rfid_parse_data_manchester(modulated_data_ptr, tag_payload))
+  if(rfid_parse_data_manchester(modulated_data_ptr, tag_payload))
   {
     rfid_tag_ptr->encode_scheme = MANCHESTER;
   }
-  else if(kStatus_Success == rfid_parse_data_biphase(modulated_data_ptr, tag_payload))
+  else if(rfid_parse_data_biphase(modulated_data_ptr, tag_payload))
   {
     rfid_tag_ptr->encode_scheme = BIPHASE;
   }
@@ -372,7 +346,7 @@ status_t rfid_parse_data(rfidTag *rfid_tag_ptr)
     {
       rfid_tag_ptr->tag_data |= (tag_payload[i] << (8 * (4 - i))); 
     }
-    result = kStatus_Success;
+    result = true;
 #ifdef RFID_DBG_PARSE_DATA
     PRINTF(">>> Parse Data >>> Got Tag, Customer Spec ID: 0x%02x, Tag ID: 0x%04x.\r\n", rfid_tag_ptr->customer_spec_id, rfid_tag_ptr->tag_data);
     PRINTF(">>> Parse Data >>> Tag Buffer: \r\n");
@@ -386,53 +360,53 @@ status_t rfid_parse_data(rfidTag *rfid_tag_ptr)
   return result;
 }
 
-status_t rfid_parse_data_manchester(unsigned char * modulated_data_ptr, unsigned char * tag_payload_ptr)
+bool rfid_parse_data_manchester(unsigned char * modulated_data_ptr, unsigned char * tag_payload_ptr)
 {
-  status_t result = kStatus_Fail;
+  bool result = false;
   bool without_shift_phase = false;
   bool with_shift_phase = true;
   // contains demodulated data, except 9bits header.
   unsigned char bits_buffer[RFID_EM4100_DATA_BUFFER_SIZE];
 
-  if(kStatus_Success == rfid_demodule_data(MANCHESTER, modulated_data_ptr, without_shift_phase, bits_buffer) 
-     || kStatus_Success == rfid_demodule_data(MANCHESTER, modulated_data_ptr, with_shift_phase, bits_buffer))
+  if(rfid_demodule_data(MANCHESTER, modulated_data_ptr, without_shift_phase, bits_buffer) 
+     || rfid_demodule_data(MANCHESTER, modulated_data_ptr, with_shift_phase, bits_buffer))
   {
     // try get the tag payload from demoduled data
     // maybe not success if parity check failed.
     if(rfid_try_get_tag_payload(bits_buffer, tag_payload_ptr))
     {
-      result = kStatus_Success;
+      result = true;
     }
   }
 
   return result;
 }
 
-status_t rfid_parse_data_biphase(unsigned char * modulated_data_ptr, unsigned char * tag_payload_ptr)
+bool rfid_parse_data_biphase(unsigned char * modulated_data_ptr, unsigned char * tag_payload_ptr)
 {
-  status_t result = kStatus_Fail;
+  bool result = false;
   bool without_shift_phase = false;
   bool with_shift_phase = true;
   // contains demodulated data, except 9bits header.
   unsigned char bits_buffer[RFID_EM4100_DATA_BUFFER_SIZE];
 
-  if(kStatus_Success == rfid_demodule_data(BIPHASE, modulated_data_ptr, without_shift_phase, bits_buffer) 
-     || kStatus_Success == rfid_demodule_data(BIPHASE, modulated_data_ptr, with_shift_phase, bits_buffer))
+  if(rfid_demodule_data(BIPHASE, modulated_data_ptr, without_shift_phase, bits_buffer) 
+     || rfid_demodule_data(BIPHASE, modulated_data_ptr, with_shift_phase, bits_buffer))
   {
     // try get the tag payload from demoduled data
     // maybe not success if parity check failed.
     if(rfid_try_get_tag_payload(bits_buffer, tag_payload_ptr))
     {
-      result = kStatus_Success;
+      result = true;
     }
   }
 
   return result;
 }
 
-status_t rfid_demodule_data(encodeScheme code_scheme, unsigned char * mod_data, bool shift_phase, unsigned char * demod_data)
+bool rfid_demodule_data(encodeScheme code_scheme, unsigned char * mod_data, bool shift_phase, unsigned char * demod_data)
 {
-  status_t result = kStatus_Fail;
+  bool result = false;
   unsigned char header_position = 0;
   bool is_ticked = false;
   bool found_header = false;
@@ -551,15 +525,8 @@ status_t rfid_demodule_data(encodeScheme code_scheme, unsigned char * mod_data, 
 
   if(found_header)
   {
-#ifdef RFID_DBG_PARSE_DATA
-    PRINTF(">>> PARSE DATA >>> Demoduled data. \r\n", continue_one_counter);
-    for(unsigned char i = 0; i < RFID_EM4100_DATA_BITS * 2 / 8; i++)
-    {
-      PRINTF("0x%02x - 0b%08b \r\n", raw_data[i], raw_data[i]);
-    }
-#endif
     rfid_extract_bits(raw_data, demod_data, header_position, RFID_EM4100_DATA_BITS - RFID_HEADER_BITS);
-    result = kStatus_Success;
+    result = true;
   }
 
   return result;
@@ -636,9 +603,6 @@ void rfid_extract_bits(unsigned char * source, unsigned char * destination, unsi
 
     destination[extracted_bits_num / 8] = (slot1 | slot2);
     extracted_bits_num += 8;
-#ifdef RFID_DBG_PARSE_DATA
-    PRINTF(">>> PARSE DATA >>> Demodule data. Extract Bits: 0xb%08b.\r\n", slot1|slot2);
-#endif
   }while(extracted_bits_num < number);
 
 }
@@ -703,7 +667,7 @@ bool rfid_parity_check(unsigned char * formatted_data)
 
     if(parity != parity_lookup_table[data])
     {
-      PRINTF("ERROR: Row %d parity check failed.  Data:%d -> 0b%04b, Parity is: %d.\r\n", i, data, data, parity);
+      PRINTF("ERROR: Row %d parity check failed.  Data:0x%x , Parity is: 0x%x.\r\n", i, data, parity);
       result = false;
       break;
     }
@@ -712,7 +676,7 @@ bool rfid_parity_check(unsigned char * formatted_data)
 
   if( column_parity != ( (bit_ptr[RFID_BIT_GROUPS - 1] & 0x1E) >> 1  ) )
   {
-    PRINTF("ERROR: Column parity check failed.  Calculated Parity is: 0b%04b, Collected Parity is: 0b%04b.\r\n", column_parity, bit_ptr[RFID_BIT_GROUPS - 1] & 0xF);
+    PRINTF("ERROR: Column parity check failed.  Calculated Parity is: 0x%x, Collected Parity is: 0x%x.\r\n", column_parity, bit_ptr[RFID_BIT_GROUPS - 1] & 0xF);
     result = false;
   }
 
@@ -750,9 +714,8 @@ void rfid_get_tag_payload(unsigned char * formatted_data_ptr, unsigned char * ta
 
 }
 
-void RFID_TRANSMITTER_HANDLER(void)
+void rfid_transmitter_handler(void)
 {
-
   // counter cycle if detect period
   if(g_reader_state >= DETECT_PERIOD)
   {
@@ -770,37 +733,18 @@ void RFID_TRANSMITTER_HANDLER(void)
     // reset rfid
     g_reader_state = RESET;
     g_rfid_carrier_cycle_counter = 0;
-  //  PRINTF("INFO: RESET reader state. \r\n");
   }
-
-  return TPM_ClearStatusFlags(RFID_TRANSMIT_TPM, RFID_TRNSIMIT_INTERRUPT_FLAG);
 }
 
-void RFID_RECEIVER_DATA_HANDLER(void)
+void rfid_receiver_data_handler(void)
 {
-  unsigned int pin_mask = PORT_GetPinsInterruptFlags(RFID_RECEIVER_DATA_PORT);
-
-  if(pin_mask & (1 << RFID_RECEIVER_DATA_GPIO_INDEX))
+  // something is detected, wait it stable. 
+  if (IDLE == g_reader_state)
   {
-    // something is detected, wait it stable. 
-    if (IDLE == g_reader_state)
-    {
-      g_reader_state = WAIT_STABLE;
-    }
-    
-    if(g_rfid_is_edge_detected && (g_reader_state > WAIT_STABLE))
-    {
-      // didn't handle last edge in time.
-//      PRINTF("ERROR: Didn't handle last edge in time. cycle_counter:%d. reader state:%d.\r\n", g_rfid_carrier_cycle_counter, g_reader_state);
-    }
-
-    // handle rise edge interrupt of rfid receiver pin
-    g_rfid_is_edge_detected = true;
-    g_rise_edge_counter++;
+    g_reader_state = WAIT_STABLE;
   }
 
-  // just clear what interrupts
-  // we do not care other pin interrupt
-  // and we also need clear RFID_RECEIVER_DATA_GPIO_INDEX
-  return PORT_ClearPinsInterruptFlags(RFID_RECEIVER_DATA_PORT, pin_mask);
+  // handle rise edge interrupt of rfid receiver pin
+  g_rfid_is_edge_detected = true;
+  g_rise_edge_counter++;
 }
